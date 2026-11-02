@@ -1,0 +1,9 @@
+{
+  "id": "fixture-chat",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "zhida-fast-1p5",
+  "choices": [
+    {"index": 0, "message": {"role": "assistant", "reasoning_content": "此字段不展示。", "content": "## 阅读建议\n\n先阅读摘要，再核对[原文](https://www.zhihu.com/question/100)。\n\n保留离线缓存。"}, "finish_reason": "stop"}
+  ]
+}

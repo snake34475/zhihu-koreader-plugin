@@ -1,0 +1,27 @@
+{
+  "Code": 0,
+  "Message": "success",
+  "Data": {
+    "HasMore": false,
+    "SearchHashId": "fixture-only",
+    "Items": [
+      {
+        "Title": "如何理解人工智能？",
+        "ContentType": "Answer",
+        "ContentID": "300",
+        "ContentText": "<p>人工智能可以辅助检索与整理。<br>保留原始来源。</p>",
+        "Url": "https://www.zhihu.com/question/100/answer/300?utm_source=fixture",
+        "AuthorName": "示例作者",
+        "AuthorAvatar": "",
+        "AuthorBadge": "",
+        "AuthorBadgeText": "",
+        "CommentCount": 0,
+        "VoteUpCount": 3,
+        "EditTime": 1700000000,
+        "CreateTime": 1690000000,
+        "AuthorityLevel": "",
+        "RankingScore": 1.0
+      }
+    ]
+  }
+}
