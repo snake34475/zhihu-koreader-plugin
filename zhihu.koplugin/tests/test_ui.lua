@@ -30,7 +30,10 @@ end
 package.loaded["ui/widget/container/widgetcontainer"] = class()
 local manager = {}
 function manager:show(widget) shown[#shown + 1] = widget end
-function manager:close(widget) closed[#closed + 1] = widget end
+function manager:close(widget)
+    closed[#closed + 1] = widget
+    if widget.onClose then widget:onClose() end
+end
 function manager:forceRePaint() end
 function manager:scheduleIn(_, callback) scheduled[callback] = true end
 function manager:unschedule(callback) scheduled[callback] = nil end
@@ -178,7 +181,7 @@ test("plugin registers global menu with tools hint and version", function()
     plugin:addToMainMenu(items)
     eq(items.zhihu.text, "知乎")
     eq(items.zhihu.sorting_hint, "tools")
-    eq(require("_meta").version, "0.2.0")
+    eq(require("_meta").version, "0.2.1")
     items.zhihu.callback()
     assert(plugin.client)
 end)
@@ -218,10 +221,12 @@ test("question navigation follows cursor and previous batch reuses memory", func
     first.custom_title_bar[2].buttons[2][2].callback()
     eq(offsets[2], 17)
     local second = shown[#shown]
+    eq(context.active, true)
     eq(second.custom_title_bar[2].buttons[2][2].enabled, false)
     second.custom_title_bar[2].buttons[2][1].callback()
     eq(#offsets, 2)
     eq(context.index, 1)
+    eq(context.active, true)
     shown[#shown]:onClose()
     eq(context.active, false)
 end)
@@ -250,4 +255,41 @@ test("empty nonfinal answer batch still offers next batch", function()
     local page = shown[#shown]
     eq(page.custom_title_bar[2].buttons[2][2].enabled, true)
     assert(page.item_table[1].text:find("下一批", 1, true))
+end)
+
+test("answer body is fetched only on tap and leaves the summary available", function()
+    local client = UI.new(config, api, cache, {})
+    local attempts, before_saves = 0, saves
+    local item = { kind = "answer", title = "测试回答", author = "", time = "", summary = "摘要…",
+        url = "https://www.zhihu.com/question/100/answer/301" }
+    client.public_answer = { fetch = function(_, url, summary)
+        attempts = attempts + 1
+        eq(url, item.url) eq(summary, item.summary)
+        return { content = "经核对的回答正文", url = url }
+    end }
+    assert(config:set("access_secret", ""))
+    client:detail(item)
+    local summary = shown[#shown]
+    eq(attempts, 0)
+    summary.buttons_table[1][3].callback()
+    eq(attempts, 1)
+    eq(saves, before_saves)
+    assert(shown[#shown].text:find("经核对的回答正文", 1, true))
+    shown[#shown].buttons_table[1][1].callback()
+    eq(closed[#closed], shown[#shown])
+    assert(config:set("access_secret", "fixture-ui-secret"))
+end)
+
+test("blocked answer probe preserves summary and reports the reason", function()
+    local client = UI.new(config, api, cache, {})
+    local item = { kind = "answer", title = "测试回答", author = "", time = "", summary = "摘要…",
+        url = "https://www.zhihu.com/question/100/answer/301" }
+    client.public_answer = { fetch = function()
+        return nil, { kind = "verification", message = "知乎要求人机验证，摘要仍可阅读。" }
+    end }
+    client:detail(item)
+    local summary = shown[#shown]
+    summary.buttons_table[1][3].callback()
+    assert(shown[#shown].text:find("人机验证", 1, true))
+    eq(closed[#closed] == summary, false)
 end)

@@ -1,6 +1,6 @@
-"""Run offline tests in LuaJIT 2.1. Python supplies only JSON and temp paths.
+"""Run offline tests in LuaJIT 2.1 or Lua 5.4. Python supplies only JSON and temp paths.
 
-Usage: python tests/run.py [--deps PATH_TO_LUPA]
+Usage: python3 tests/run.py [--deps PATH_TO_LUPA]
 Development dependency: pip install lupa. Nothing is added to the device plugin.
 """
 import argparse
@@ -18,7 +18,10 @@ if args.deps:
 try:
     from lupa.luajit21 import LuaRuntime, lua_type
 except ImportError:
-    raise SystemExit("Install the development dependency: python -m pip install lupa")
+    try:
+        from lupa.lua54 import LuaRuntime, lua_type
+    except ImportError:
+        raise SystemExit("Install the development dependency: python -m pip install lupa")
 
 root = Path(__file__).resolve().parents[1]
 lua = LuaRuntime(unpack_returned_tuples=True)

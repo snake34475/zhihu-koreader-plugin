@@ -12,13 +12,15 @@ local Errors = require("zhihu_errors")
 local Renderer = require("zhihu_renderer")
 local Schema = require("zhihu_schema")
 local Page = require("zhihu_page")
+local PublicAnswer = require("zhihu_public_answer")
 local UI = {}
 UI.__index = UI
 local titles = { hot = "知乎热榜", search = "知乎搜索", answer = "知乎直答" }
 local types = { question = "问题", answer = "回答", article = "文章", content = "内容" }
 
 function UI.new(config, api, cache, reader_ui)
-    return setmetatable({ config = config, api = api, cache = cache, reader_ui = reader_ui }, UI)
+    return setmetatable({ config = config, api = api, cache = cache, reader_ui = reader_ui,
+        public_answer = PublicAnswer.new() }, UI)
 end
 
 function UI.message(text)
@@ -106,8 +108,8 @@ function UI:menu_items()
             { text = "最近直答", callback = function() self:show_cached("answer") end },
         } },
         { text = "设置", callback = function() self:settings() end },
-        { text = "关于 · 0.2.0", callback = function()
-            UI.message("知乎 0.2.0\n热榜首页、问题回答摘要、搜索、直答与离线阅读。\n当前为文字摘要；他人回答全文与完整评论不在官方接口能力内。")
+        { text = "关于 · 0.2.1", callback = function()
+            UI.message("知乎 0.2.1\n热榜首页、问题回答摘要、搜索、直答与离线阅读。\n可按需匿名尝试获取单条回答正文；知乎可能要求人机验证。")
         end },
     }
 end
@@ -149,9 +151,11 @@ function UI:prompt(kind)
     end)
 end
 
-function UI:run_request(label, task, success, failure)
+function UI:run_request(label, task, success, failure, require_secret)
     if self.busy then UI.message("已有请求进行中，请等待或取消。") return end
-    if self.config:get("access_secret") == "" then UI.message(Errors.new("config").message) return end
+    if require_secret ~= false and self.config:get("access_secret") == "" then
+        UI.message(Errors.new("config").message) return
+    end
     NetworkMgr:runWhenConnected(function()
         if self.busy then return end
         self.busy = true
@@ -331,11 +335,20 @@ function UI:show_question(context, entry)
             end },
         },
     }
-    if context.widget then UIManager:close(context.widget) end
+    if context.widget then
+        local previous = context.widget
+        context.widget = nil -- Replacing a page must not end the question session.
+        UIManager:close(previous)
+    end
     menu = self:menu("回答摘要 · " .. Renderer.preview(context.question.title, 24), items, {
         buttons = buttons, subtitle = string.format("第 %d 批 · %s · 摘要非全文", context.index,
             entry.saved_at and "已缓存" or "刚刚更新"),
-        close_callback = function() context.active = false end,
+        close_callback = function()
+            if context.widget == menu then
+                context.widget = nil
+                context.active = false
+            end
+        end,
     })
     context.widget = menu
 end
@@ -362,6 +375,8 @@ function UI:read_answer(context, entry, index)
             },
             {
                 { text = "原始链接", enabled = answer.url ~= "", callback = function() self:open_link(answer.url) end },
+                { text = "尝试获取正文", enabled = PublicAnswer.answer_id(answer.url) ~= nil,
+                    callback = function() self:try_answer_body(answer) end },
                 { text = "评论说明", callback = function()
                     UI.message("当前官方接口不提供任意他人回答的完整评论，因此本版不展示评论列表。\n可通过原始链接查看。")
                 end },
@@ -372,15 +387,36 @@ function UI:read_answer(context, entry, index)
 end
 
 function UI:detail(item)
+    local buttons = {
+        { text = "原始链接", enabled = item.url ~= "", callback = function() self:open_link(item.url) end },
+        { text = "复制链接", enabled = item.url ~= "", callback = function() self:copy_link(item.url) end },
+    }
+    if item.kind == "answer" and PublicAnswer.answer_id(item.url) then
+        buttons[#buttons + 1] = { text = "尝试获取正文", callback = function() self:try_answer_body(item) end }
+    end
     UIManager:show(TextViewer:new{
         title = item.title, text = Renderer.detail(item),
         width = Device.screen:getWidth(), height = Device.screen:getHeight(),
         text_type = "general", force_txt = true, add_default_buttons = true,
-        buttons_table = { {
-            { text = "原始链接", enabled = item.url ~= "", callback = function() self:open_link(item.url) end },
-            { text = "复制链接", enabled = item.url ~= "", callback = function() self:copy_link(item.url) end },
-        } },
+        buttons_table = { buttons },
     })
+end
+
+function UI:try_answer_body(item)
+    self:run_request("回答正文", function() return self.public_answer:fetch(item.url, item.summary) end,
+        function(result)
+            local viewer
+            viewer = TextViewer:new{
+                title = "回答正文 · 网页接口",
+                text = item.title .. "\n\n" .. result.content .. "\n\n来源：" .. result.url
+                    .. "\n回答 ID 已核对；网页接口未提供可独立验证的全文标记。",
+                width = Device.screen:getWidth(), height = Device.screen:getHeight(),
+                text_type = "general", force_txt = true, add_default_buttons = true,
+                buttons_table = { { { text = "返回摘要", callback = function() UIManager:close(viewer) end } } },
+            }
+            UIManager:show(viewer)
+        end,
+        function(err) UI.message(err.message) end, false)
 end
 
 function UI:actions(item, kind, query, raw)

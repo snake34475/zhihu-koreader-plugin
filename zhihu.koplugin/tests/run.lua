@@ -26,7 +26,9 @@ end
 
 dofile(plugin_root .. "/tests/test_schema.lua")
 dofile(plugin_root .. "/tests/test_api.lua")
+dofile(plugin_root .. "/tests/test_public_answer.lua")
 dofile(plugin_root .. "/tests/test_storage.lua")
 dofile(plugin_root .. "/tests/test_questions.lua")
 dofile(plugin_root .. "/tests/test_ui.lua")
-print(string.format("%d tests passed in %s (%s)", passed, jit.version, jit.arch))
+local runtime = jit and (jit.version .. " (" .. jit.arch .. ")") or _VERSION
+print(string.format("%d tests passed in %s", passed, runtime))

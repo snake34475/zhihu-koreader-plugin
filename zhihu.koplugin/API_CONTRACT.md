@@ -19,4 +19,10 @@
 
 Fixtures 是按核验字段自行编写的虚构数据，不含真实用户数据、密钥或账号响应。
 
+## 匿名回答正文探测（实验功能）
+
+此请求不属于上表的开放平台接口。用户点击单条回答的“尝试获取正文”时，插件对固定域名 `www.zhihu.com` 发起一次 `GET /api/v4/answers/{回答 ID}?include=content,excerpt,paid_info`。只接受回答 ID 匹配、正文非空、且未检测到付费或截断提示的 HTTP 200 JSON；不发送 Access Secret、Cookie，不跟随跳转，不重试，不缓存正文。接口没有可靠的全文标记，界面只称“回答正文”。
+
+2026-11-02 在 PW4 上以一条公开回答测试：该详情接口 HTTP 403，响应被识别为人机验证，未取得正文。原始回答页面和 `api.zhihu.com/answers/{id}` 同样返回 HTTP 403。此记录仅说明当时的设备与网络结果，不代表所有回答始终不可访问。
+
 KOReader 对接参考的是官方仓库的 [socketutil](https://github.com/koreader/koreader/blob/master/frontend/socketutil.lua)、[Trapper](https://github.com/koreader/koreader/blob/master/frontend/ui/trapper.lua)、[Menu](https://github.com/koreader/koreader/blob/master/frontend/ui/widget/menu.lua)、[InputDialog](https://github.com/koreader/koreader/blob/master/frontend/ui/widget/inputdialog.lua) 和 [DataStorage](https://github.com/koreader/koreader/blob/master/datastorage.lua)。这些在线源码用于核对调用方式，尚未在目标设备的 2026.07.x 版本验证。
