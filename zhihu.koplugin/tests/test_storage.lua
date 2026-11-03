@@ -1,5 +1,6 @@
 local Config = require("zhihu_config")
 local Cache = require("zhihu_cache")
+local LoggedCache = require("zhihu_logged_cache")
 local Storage = require("zhihu_storage")
 local JSON = require("json")
 
@@ -20,11 +21,11 @@ test("settings persist across reopen and clear secret on disk", function()
 end)
 
 test("settings reject invalid ranges and unsafe URLs", function()
-    for _, pair in ipairs({ { "hot_limit", 31 }, { "search_count", 11 }, { "timeout", 0 },
+    for _, pair in ipairs({ { "hot_limit", 31 }, { "timeout", 0 },
         { "timeout", 121 }, { "hot_limit", 1.5 }, { "base_url", "http://example.com" },
         { "base_url", "https://user:pass@example.com" }, { "base_url", "https://a?secret=x" },
         { "base_url", "https://a/#fragment" }, { "access_secret", "a\r\nb" },
-        { "model", "unknown" }, { "download_images", true } }) do
+        { "model", "unknown" }, { "download_images", true }, { "reader_side", "top" } }) do
         eq(Config.validate(pair[1], pair[2]), nil)
     end
     eq(Config.validate("base_url", " https://developer.zhihu.com/ "), "https://developer.zhihu.com")
@@ -48,7 +49,7 @@ end)
 
 test("all cache categories survive reopening without network", function()
     local cache = Cache.new(test_directory, nil, function() return 1000 end)
-    for _, item in ipairs({ {"hot", "hot"}, {"search", "search"}, {"answer", "answer"} }) do
+    for _, item in ipairs({ {"hot", "hot"}, {"answer", "answer"} }) do
         assert(cache:save(item[1], "查询", JSON.decode(fixture(item[2]))))
         local loaded = assert(Cache.new(test_directory):load(item[1]))
         eq(loaded.query, "查询") eq(loaded.saved_at, 1000)
@@ -78,10 +79,10 @@ end)
 test("cache rejects path traversal, corrupt JSON and incompatible envelope", function()
     local cache = Cache.new(test_directory)
     eq(cache:load("../escape"), nil)
-    write(test_directory .. "/search.json", "not json")
-    local _, err = cache:load("search") eq(err, "format")
-    assert(Storage.write(test_directory .. "/search.json", {version = 99}))
-    _, err = cache:load("search") eq(err, "format")
+    write(test_directory .. "/hot.json", "not json")
+    local _, err = cache:load("hot") eq(err, "format")
+    assert(Storage.write(test_directory .. "/hot.json", {version = 99}))
+    _, err = cache:load("hot") eq(err, "format")
 end)
 
 test("bounded file read rejects oversized cache", function()
@@ -89,4 +90,23 @@ test("bounded file read rejects oversized cache", function()
     write(path, string.rep("x", Storage.MAX_BYTES + 1))
     local _, err = Storage.read(path)
     eq(err, "size")
+end)
+
+test("logged content uses a separate cache and rejects incomplete records", function()
+    local directory = test_directory .. "/logged"
+    assert(os.execute("mkdir \"" .. directory .. "\""))
+    local cache = LoggedCache.new(directory, function() return 1700000000 end)
+    eq(cache:save_answer({ answer_id = "301", content = "", fetched_at = 1700000000 }), nil)
+    assert(cache:save_answer({ answer_id = "301", content = "已核验正文", fetched_at = 1700000000 }))
+    local answer = assert(cache:load_answer("301"))
+    eq(answer.content, "已核验正文")
+    eq(cache:load_answer("../301"), nil)
+    local page = { items = { { id = "c1", author = "甲", content = "评论" } },
+        next_cursor = "20", is_end = false, fetched_at = 1700000000, range = "本页 1 条" }
+    assert(cache:save_comments("301", "0", page))
+    local saved = assert(cache:load_comments("301", "0"))
+    eq(saved.next_cursor, "20") eq(saved.items[1].content, "评论")
+    local file = assert(io.open(directory .. "/answer-301.json", "rb"))
+    local raw = file:read("*a") file:close()
+    assert(not raw:find("z_c0", 1, true) and not raw:find("fixture-cookie", 1, true))
 end)

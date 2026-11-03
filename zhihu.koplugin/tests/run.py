@@ -24,6 +24,7 @@ except ImportError:
         raise SystemExit("Install the development dependency: python -m pip install lupa")
 
 root = Path(__file__).resolve().parents[1]
+probe_root = root.parent / "zhihu-qr-probe.koplugin"
 lua = LuaRuntime(unpack_returned_tuples=True)
 
 
@@ -55,6 +56,7 @@ def encode(value):
 lua.globals().test_json_decode = decode
 lua.globals().test_json_encode = encode
 lua.globals().plugin_root = root.as_posix()
+lua.globals().probe_root = probe_root.as_posix()
 if os.name == "nt":
     # Device uses POSIX rename-over-existing semantics; Windows CRT rename does not.
     def posix_rename(source, destination):
@@ -68,9 +70,15 @@ if os.name == "nt":
 with tempfile.TemporaryDirectory(prefix="zhihu-koreader-tests-") as temp:
     lua.globals().test_directory = Path(temp).as_posix()
     lua.execute('package.path = plugin_root .. "/?.lua;" .. package.path')
+    lua.execute('package.path = package.path .. ";" .. probe_root .. "/?.lua"')
     lua.execute('package.preload["json"] = function() return {decode=test_json_decode, encode=test_json_encode} end')
     # Compile every Lua file, including the KOReader entry point and UI.
     for path in sorted(root.rglob("*.lua")):
         lua.globals().syntax_path = path.as_posix()
         lua.execute("assert(loadfile(syntax_path))")
+    for path in sorted(probe_root.rglob("*.lua")):
+        lua.globals().syntax_path = path.as_posix()
+        lua.execute("assert(loadfile(syntax_path))")
     lua.execute((root / "tests" / "run.lua").read_text(encoding="utf-8"))
+    lua.execute('package.loaded["json"] = nil')
+    lua.execute((probe_root / "tests" / "test_protocol.lua").read_text(encoding="utf-8"))

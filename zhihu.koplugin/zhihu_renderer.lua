@@ -45,14 +45,17 @@ function Renderer.preview(value, maximum)
     return index <= #text and text:sub(1, index - 1) .. "…" or text
 end
 
-function Renderer.detail(item)
+function Renderer.summary(item)
     local lines = { item.title }
     if item.author ~= "" then lines[#lines + 1] = "作者：" .. item.author end
     if item.time ~= "" then lines[#lines + 1] = "时间：" .. item.time end
     lines[#lines + 1] = "\n" .. (item.summary ~= "" and item.summary or "接口未提供摘要。")
-    lines[#lines + 1] = "\n来源：" .. (item.url ~= "" and item.url or "未提供链接")
-    lines[#lines + 1] = "\n以上为开放平台返回的摘要，不代表原文全文。"
     return table.concat(lines, "\n")
+end
+
+function Renderer.detail(item)
+    return Renderer.summary(item) .. "\n\n来源：" .. (item.url ~= "" and item.url or "未提供链接")
+        .. "\n以上为开放平台返回的摘要，不代表原文全文。"
 end
 
 return Renderer

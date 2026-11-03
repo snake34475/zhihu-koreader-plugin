@@ -27,6 +27,7 @@ end
 dofile(plugin_root .. "/tests/test_schema.lua")
 dofile(plugin_root .. "/tests/test_api.lua")
 dofile(plugin_root .. "/tests/test_public_answer.lua")
+dofile(plugin_root .. "/tests/test_logged_api.lua")
 dofile(plugin_root .. "/tests/test_storage.lua")
 dofile(plugin_root .. "/tests/test_questions.lua")
 dofile(plugin_root .. "/tests/test_ui.lua")

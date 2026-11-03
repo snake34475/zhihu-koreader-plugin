@@ -32,10 +32,9 @@ test("canonical question links strip answer and tracking paths safely", function
     eq(Schema.question_url("https://www.zhihu.com/question/100evil"), nil)
 end)
 
-test("question API sends canonical URL and bounded count with exact offset", function()
+test("question API sends canonical URL and fixed count with exact offset", function()
     local config = Config.open(test_directory .. "/question-config.json")
     config.values.access_secret = "fixture-question-secret"
-    config.values.search_count = 99
     local calls = 0
     local api = API.new(config, {transport = function(request)
         calls = calls + 1

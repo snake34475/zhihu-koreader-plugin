@@ -5,9 +5,9 @@ Config.defaults = {
     base_url = "https://developer.zhihu.com",
     access_secret = "",
     hot_limit = 30,
-    search_count = 10,
     timeout = 30,
     model = "zhida-fast-1p5",
+    reader_side = "left", -- 阅读页高频按钮列位置：left / right
     download_images = false, -- Reserved for P1; MVP never fetches images.
 }
 Config.models = { "zhida-fast-1p5", "zhida-thinking-1p5", "zhida-agent" }
@@ -31,8 +31,8 @@ function Config.validate(key, value)
         if type(value) ~= "string" then return nil, "密钥格式无效。" end
         value = value:match("^%s*(.-)%s*$")
         if value:find("[%c%s]") then return nil, "密钥不能包含空白或控制字符。" end
-    elseif key == "hot_limit" or key == "search_count" or key == "timeout" then
-        local maximum = key == "hot_limit" and 30 or key == "search_count" and 10 or 120
+    elseif key == "hot_limit" or key == "timeout" then
+        local maximum = key == "hot_limit" and 30 or 120
         local minimum = key == "timeout" and 5 or 1
         local number = tonumber(value)
         if not number or number ~= math.floor(number) or number < minimum or number > maximum then
@@ -43,6 +43,8 @@ function Config.validate(key, value)
         local found = false
         for _, model in ipairs(Config.models) do if value == model then found = true end end
         if not found then return nil, "不支持的直答模型。" end
+    elseif key == "reader_side" then
+        if value ~= "left" and value ~= "right" then return nil, "按钮列只能位于左侧或右侧。" end
     elseif key == "download_images" then
         if value ~= false then return nil, "图片下载将在 P1 加入，当前仅显示文字。" end
     else

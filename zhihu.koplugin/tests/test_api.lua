@@ -27,23 +27,6 @@ test("Bearer headers, fresh timestamps and hot cap", function()
     assert(not calls[1].url:find(secret, 1, true))
 end)
 
-test("search percent encoding and request/response count limits", function()
-    config.values.search_count = 99
-    local seen
-    local many = { Code = 0, Data = { Items = {} } }
-    for i = 1, 20 do many.Data.Items[i] = { Title = "item " .. i } end
-    local api = API.new(config, { transport = function(request)
-        seen = request
-        return 200, JSON.encode(many)
-    end })
-    local result = assert(api:search("人工智能 &x=1"))
-    eq(#result.items, 10)
-    assert(seen.url:find("Count=10", 1, true))
-    assert(seen.url:find("%E4%BA%BA", 1, true))
-    assert(seen.url:find("%26x%3D1", 1, true))
-    config.values.search_count = 10
-end)
-
 test("chat uses supported non-streaming contract", function()
     local api = API.new(config, { transport = function(request)
         eq(request.method, "POST")
@@ -59,9 +42,7 @@ end)
 
 test("empty input never calls transport", function()
     local api = API.new(config, { transport = function() error("should not send") end })
-    local result, err = api:search("  ")
-    eq(result, nil) eq(err.kind, "input")
-    result, err = api:ask(nil)
+    local result, err = api:ask(nil)
     eq(result, nil) eq(err.kind, "input")
 end)
 

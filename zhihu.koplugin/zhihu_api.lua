@@ -110,17 +110,6 @@ local function nonempty(value)
     return type(value) == "string" and value:match("^%s*(.-)%s*$") or ""
 end
 
-function API:search(query)
-    query = nonempty(query)
-    if query == "" then return nil, Errors.new("input") end
-    local count = Config.clamp(self.config:get("search_count"), 10, 10)
-    local raw, err = self:request("GET", "/api/v1/content/zhihu_search", { Query = query, Count = count })
-    if not raw then return nil, err end
-    local result = Schema.list(raw, count)
-    if not result then return nil, Errors.new("format") end
-    return result, nil, raw
-end
-
 function API:ask(question)
     question = nonempty(question)
     if question == "" then return nil, Errors.new("input") end
@@ -139,7 +128,7 @@ function API:question_answers(url, offset)
     offset = offset or 0
     if not url or type(offset) ~= "number" or offset < 0 or offset ~= math.floor(offset)
         or offset > 9007199254740991 then return nil, Errors.new("input") end
-    local limit = Config.clamp(self.config:get("search_count"), 10, 10)
+    local limit = 10
     local raw, err = self:request("GET", "/api/v1/content/question_answers", {
         QuestionUrl = url, Offset = offset, Limit = limit,
     })

@@ -3,6 +3,8 @@ local DataStorage = require("datastorage")
 local Config = require("zhihu_config")
 local API = require("zhihu_api")
 local Cache = require("zhihu_cache")
+local LoggedAPI = require("zhihu_logged_api")
+local LoggedCache = require("zhihu_logged_cache")
 local ZhihuUI = require("zhihu_ui")
 local lfs = require("libs/libkoreader-lfs")
 
@@ -19,10 +21,17 @@ function Zhihu:initialize()
         ZhihuUI.message("无法创建知乎缓存目录，请检查数据目录权限和空间。")
         return false
     end
+    local logged_cache_directory = DataStorage:getDataDir() .. "/zhihu-session-cache"
+    if not lfs.attributes(logged_cache_directory, "mode") and not lfs.mkdir(logged_cache_directory) then
+        ZhihuUI.message("无法创建知乎登录内容缓存目录，请检查数据目录权限和空间。")
+        return false
+    end
     self.config = Config.open(DataStorage:getSettingsDir() .. "/zhihu_configuration.json")
     self.api = API.new(self.config, { logger = require("logger") })
     self.cache = Cache.new(cache_directory, function() return self.config:get("access_secret") end)
-    self.client = ZhihuUI.new(self.config, self.api, self.cache, self.ui)
+    self.logged_api = LoggedAPI.new({ timeout_provider = function() return self.config:get("timeout") end })
+    self.logged_cache = LoggedCache.new(logged_cache_directory)
+    self.client = ZhihuUI.new(self.config, self.api, self.cache, self.ui, self.logged_api, self.logged_cache)
     if self.config.load_error then ZhihuUI.message("配置文件损坏，当前使用默认配置；缓存仍可读取。") end
     return true
 end

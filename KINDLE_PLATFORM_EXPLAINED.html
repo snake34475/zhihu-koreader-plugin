@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PW4 阅读环境原理与取舍 · 学习讲解</title>
+<style>
+  :root {
+    --bg: #12151c;
+    --bg-panel: #1a1f2b;
+    --bg-card: #202734;
+    --bg-code: #161b25;
+    --border: #2d3648;
+    --text: #d6dce8;
+    --text-dim: #8a93a6;
+    --accent: #5aa8ff;
+    --accent-soft: rgba(90,168,255,.12);
+    --green: #4ecf8d;
+    --orange: #f0a24b;
+    --red: #e06c6c;
+    --purple: #a78bfa;
+    --teal: #3fc8c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", -apple-system, sans-serif;
+    line-height: 1.75;
+    font-size: 15.5px;
+  }
+
+  /* ===== Layout ===== */
+  .layout { display: flex; max-width: 1280px; margin: 0 auto; }
+  nav.toc {
+    position: sticky; top: 0;
+    width: 250px; flex-shrink: 0;
+    height: 100vh; overflow-y: auto;
+    padding: 28px 16px 28px 24px;
+    border-right: 1px solid var(--border);
+  }
+  nav.toc h2 { font-size: 13px; color: var(--text-dim); letter-spacing: 2px; margin-bottom: 14px; font-weight: normal; }
+  nav.toc a {
+    display: block; padding: 5px 10px; margin: 1px 0;
+    color: var(--text-dim); text-decoration: none;
+    font-size: 13.5px; border-radius: 6px;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+  }
+  nav.toc a:hover { color: var(--text); background: var(--bg-card); }
+  nav.toc a.active { color: var(--accent); background: var(--accent-soft); border-left-color: var(--accent); }
+  nav.toc a .num { display: inline-block; width: 22px; color: var(--text-dim); font-size: 12px; }
+  main { flex: 1; min-width: 0; padding: 36px 44px 120px; max-width: 900px; }
+
+  @media (max-width: 900px) {
+    nav.toc { display: none; }
+    main { padding: 24px 18px 80px; }
+  }
+
+  /* ===== Typography ===== */
+  h1 { font-size: 27px; margin-bottom: 6px; letter-spacing: .5px; }
+  .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 30px; }
+  h2 {
+    font-size: 21px; margin: 56px 0 18px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .badge {
+    font-size: 12px; font-weight: bold; color: var(--accent);
+    background: var(--accent-soft); border-radius: 6px;
+    padding: 2px 8px; flex-shrink: 0;
+  }
+  h3 { font-size: 16.5px; margin: 26px 0 10px; color: #e8edf6; }
+  p { margin: 10px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  strong { color: #fff; }
+  em.hl { color: var(--orange); font-style: normal; font-weight: bold; }
+  code {
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px;
+    font-family: Consolas, "JetBrains Mono", monospace;
+    font-size: 13px; color: #9fd0ff;
+  }
+  pre {
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+    overflow-x: auto; margin: 14px 0;
+    font-size: 13px; line-height: 1.6;
+  }
+  pre code { background: none; border: none; padding: 0; color: #b8c4d8; }
+  pre .cmt { color: #6b7688; }
+  pre .kw { color: #7cc7ff; }
+  pre .str { color: #9dce7f; }
+
+  /* ===== Callout boxes ===== */
+  .box {
+    border-radius: 10px; padding: 14px 18px; margin: 16px 0;
+    border: 1px solid var(--border); background: var(--bg-panel);
+    font-size: 14.5px;
+  }
+  .box .box-title { font-weight: bold; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .box.key { border-left: 3px solid var(--accent); }
+  .box.key .box-title { color: var(--accent); }
+  .box.warn { border-left: 3px solid var(--orange); }
+  .box.warn .box-title { color: var(--orange); }
+  .box.good { border-left: 3px solid var(--green); }
+  .box.good .box-title { color: var(--green); }
+  .box.stop { border-left: 3px solid var(--red); }
+  .box.stop .box-title { color: var(--red); }
+  .box p { margin: 4px 0; }
+
+  /* ===== Tables ===== */
+  .tbl-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--border); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { padding: 9px 13px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--bg-card); color: #cdd6e4; font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td .yes { color: var(--green); font-weight: bold; }
+  td .no { color: var(--red); font-weight: bold; }
+  td .mid { color: var(--orange); }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* ===== Diagrams ===== */
+  .diagram {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin: 18px 0;
+  }
+  .diagram .d-title { text-align: center; color: var(--text-dim); font-size: 12.5px; margin-bottom: 16px; letter-spacing: 1px; }
+
+  /* layer stack */
+  .stack { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .layer {
+    width: 100%; max-width: 560px;
+    border-radius: 10px; padding: 10px 18px;
+    text-align: center; border: 1px solid var(--border);
+  }
+  .layer .l-name { font-weight: bold; font-size: 14.5px; }
+  .layer .l-desc { font-size: 12px; opacity: .75; margin-top: 2px; }
+  .arrow-down { color: var(--text-dim); font-size: 16px; line-height: 1.4; padding: 2px 0; }
+  .l-hw { background: #2a2530; border-color: #453c52; }
+  .l-kernel { background: #26303f; }
+  .l-native { background: #22303a; }
+  .l-kual { background: #2b3040; }
+  .l-ko { background: #1f3540; border-color: #2f5560; }
+  .l-plugin { background: #14343a; border-color: #2a5c62; }
+
+  /* flow steps */
+  .flow { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; justify-content: center; }
+  .step {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; text-align: center;
+    min-width: 120px; max-width: 175px;
+  }
+  .step .s-t { font-weight: bold; font-size: 13.5px; color: #e8edf6; }
+  .step .s-d { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
+  .step-arrow { display: flex; align-items: center; color: var(--text-dim); padding: 0 8px; font-size: 17px; }
+
+  /* dual route compare */
+  .routes { display: flex; gap: 18px; flex-wrap: wrap; }
+  .route {
+    flex: 1; min-width: 280px;
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+  }
+  .route h4 { text-align: center; font-size: 14.5px; margin-bottom: 14px; }
+  .route.rA h4 { color: var(--purple); }
+  .route.rB h4 { color: var(--teal); }
+  .route .node {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px; text-align: center; font-size: 13px;
+  }
+  .route .node.hl-n { border-color: var(--teal); color: var(--teal); }
+  .route .node.dim-n { color: var(--text-dim); }
+  .route .varrow { text-align: center; color: var(--text-dim); font-size: 14px; padding: 1px 0; }
+  .route ul { list-style: none; margin-top: 12px; font-size: 12.5px; color: var(--text-dim); }
+  .route li { padding: 3px 0; }
+  .route li::before { content: "· "; color: var(--text-dim); }
+
+  /* gate list */
+  .gates { counter-reset: gate; margin: 18px 0; }
+  .gate {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 13px 16px; margin-bottom: 8px;
+  }
+  .gate::before {
+    counter-increment: gate; content: counter(gate);
+    flex-shrink: 0; width: 30px; height: 30px;
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 15px;
+  }
+  .gate .g-t { font-weight: bold; font-size: 14.5px; }
+  .gate .g-d { font-size: 13px; color: var(--text-dim); }
+
+  /* vocab cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    transition: border-color .15s;
+  }
+  .card:hover { border-color: #3d4a63; }
+  .card .c-name { font-weight: bold; font-size: 14.5px; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card .c-tag { font-size: 10.5px; padding: 1px 7px; border-radius: 20px; font-weight: normal; }
+  .t-sys { background: rgba(167,139,250,.15); color: var(--purple); }
+  .t-app { background: rgba(90,168,255,.15); color: var(--accent); }
+  .t-ext { background: rgba(78,207,141,.15); color: var(--green); }
+  .t-file { background: rgba(240,162,75,.15); color: var(--orange); }
+  .card .c-who { font-size: 12px; color: var(--teal); margin-bottom: 5px; }
+  .card p { font-size: 12.8px; color: var(--text-dim); margin: 0; line-height: 1.6; }
+
+  /* collapsible */
+  details { margin: 12px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel); }
+  details summary {
+    cursor: pointer; padding: 12px 18px; font-weight: bold; font-size: 14.5px;
+    color: #dfe6f0; list-style: none; display: flex; align-items: center; gap: 8px;
+    user-select: none;
+  }
+  details summary::before { content: "▸"; color: var(--text-dim); transition: transform .15s; font-size: 12px; }
+  details[open] summary::before { transform: rotate(90deg); }
+  details .d-body { padding: 2px 18px 14px; font-size: 14px; }
+  details .d-body p { margin: 8px 0; }
+
+  .footnote { font-size: 12.5px; color: var(--text-dim); }
+  .divider-note { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>目 录</h2>
+  <a href="#s1"><span class="num">01</span>先分清层次</a>
+  <a href="#s2"><span class="num">02</span>KUAL 怎样工作</a>
+  <a href="#s3"><span class="num">03</span>KOReader 与 Lua 插件</a>
+  <a href="#s4"><span class="num">04</span>EPUB 有什么、没什么</a>
+  <a href="#s5"><span class="num">05</span>三种方式横向对比</a>
+  <a href="#s6"><span class="num">06</span>"装安卓"的两条路线</a>
+  <a href="#s7"><span class="num">07</span>为什么 PW4 更难</a>
+  <a href="#s8"><span class="num">08</span>AI 能突破什么</a>
+  <a href="#s9"><span class="num">09</span>知乎/微信读书能用吗</a>
+  <a href="#s10"><span class="num">10</span>Aristotle 是什么</a>
+  <a href="#s11"><span class="num">11</span>按目标选路线</a>
+  <a href="#s12"><span class="num">12</span>尚未解决的问题</a>
+</nav>
+
+<main>
+
+<h1>PW4 阅读环境原理与取舍</h1>
+<div class="subtitle">学习讲解版 · 整理自 KINDLE_PLATFORM_EXPLAINED.md（2026-11-03）· 面向 Kindle Paperwhite 4 · 本篇为资料与源码研究，未连接设备实测</div>
+
+<div class="box key">
+  <div class="box-title">整篇文档在回答什么问题</div>
+  <p>"我想在 PW4 上舒服地看知乎/微信读书，到底有几种做法？每种做法能做到什么、做不到什么？"</p>
+  <p>答案骨架：<strong>KUAL 管入口 → KOReader 管阅读 → 插件管内容 → EPUB 管离线快照 → Android 是另一条完全不同的路线</strong>。它们是不同层次的东西，不能互相替代，也经常被混为一谈。</p>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2 id="s1"><span class="badge">01</span>先分清：系统、应用、扩展、文件</h2>
+
+<p>面对 PW4 时你不是在"三选一"，而是在面对<strong>不同层次的九样东西</strong>。把它们分层放好，后面的所有讨论才不会串台。</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="c-name">Kindle 原生系统 <span class="c-tag t-sys">系统</span></div>
+    <div class="c-who">运行者：设备启动链</div>
+    <p>Linux 内核 + 驱动 + 系统服务 + 原生界面。负责触摸、屏幕、Wi-Fi、电源和基础运行环境。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">越狱 <span class="c-tag t-sys">机制</span></div>
+    <div class="c-who">针对具体机型/固件的方案</div>
+    <p>让设备能运行第三方代码的能力和配套机制。<strong>不等于换系统</strong>。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">KUAL <span class="c-tag t-app">应用</span></div>
+    <div class="c-who">Kindle 原生环境</div>
+    <p>Kindle Unified Application Launcher，启动器。显示菜单、启动阅读器和工具。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">KUAL 扩展 <span class="c-tag t-ext">扩展</span></div>
+    <div class="c-who">KUAL 解析菜单，系统执行程序</div>
+    <p>菜单配置 + 它启动的脚本/程序。负责同步按钮、启动按钮、设置开关。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">KOReader <span class="c-tag t-app">应用</span></div>
+    <div class="c-who">Kindle Linux（也有其他平台版本）</div>
+    <p>独立阅读器：有自己的 UI、排版引擎和设备适配。本项目阅读 EPUB 和插件的宿主。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">KOReader 插件 <span class="c-tag t-ext">扩展</span></div>
+    <div class="c-who">KOReader 的 LuaJIT 与插件加载器</div>
+    <p>进入 KOReader 进程的扩展代码。本项目用它获取信息流、组织正文和评论、缓存与导航。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">EPUB <span class="c-tag t-file">文件</span></div>
+    <div class="c-who">KOReader 等阅读器打开</div>
+    <p>电子出版物格式。保存目录、正文、图片、链接和评论快照——是<strong>静态内容包</strong>，不是 App。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">Android <span class="c-tag t-sys">平台</span></div>
+    <div class="c-who">对应硬件/内核适配方案</div>
+    <p>内核与用户空间共同构成的应用平台，为 APK 提供运行环境。需要专门适配。</p>
+  </div>
+  <div class="card">
+    <div class="c-name">Aristotle <span class="c-tag t-app">应用</span></div>
+    <div class="c-who">Kindle Linux</div>
+    <p>专为 PW4 写的原生书库和阅读器，运行期间替代原生界面。Rust 工程。</p>
+  </div>
+</div>
+
+<div class="box warn">
+  <div class="box-title">易混点：书架里的图标 ≠ 一本普通电子书</div>
+  <p>历史上的 Kindlet 应用也能以"类似书籍的入口"出现在书架里。判断依据是<strong>内部格式、加载器和运行过程</strong>，不是显示位置。</p>
+</div>
+
+<h3>整体层次图</h3>
+<p>普通的 Kindle 使用关系画成这样。注意 <code>KUAL</code> 只是常见入口，并非所有启动方法都必须经过它：</p>
+
+<div class="diagram">
+  <div class="d-title">KINDLE 阅读环境层次</div>
+  <div class="stack">
+    <div class="layer l-hw"><div class="l-name">硬件与启动链</div><div class="l-desc">电源 / 触摸 / 墨水屏 / 安全启动</div></div>
+    <div class="arrow-down">↓</div>
+    <div class="layer l-kernel"><div class="l-name">Kindle Linux 内核</div><div class="l-desc">驱动 · 系统服务 · 基础运行环境</div></div>
+    <div class="arrow-down">↓</div>
+    <div class="layer l-native"><div class="l-name">亚马逊原生界面</div><div class="l-desc">书架 · 书店 · 原生阅读</div></div>
+    <div class="arrow-down">↓ 越狱后</div>
+    <div class="layer l-kual"><div class="l-name">KUAL 启动器</div><div class="l-desc">菜单扩展 → shell 脚本 / 独立程序</div></div>
+    <div class="arrow-down">↓ 启动</div>
+    <div class="layer l-ko"><div class="l-name">KOReader 阅读器</div><div class="l-desc">LuaJIT 驱动的独立阅读应用</div></div>
+    <div class="arrow-down">↓ 加载</div>
+    <div class="layer l-plugin"><div class="l-name">.koplugin 扩展</div><div class="l-desc">知乎 / 未来多平台阅读功能（本项目）</div></div>
+  </div>
+</div>
+
+<details>
+  <summary>为什么"越狱 ≠ 换系统"？</summary>
+  <div class="d-body">
+    <p>KindleModding 对越狱的定义就是"让设备运行外部代码"。越狱拿到的是<strong>用户态的执行自由</strong>（能跑 KOReader、SSH、原生程序），而不是修改启动链、替换内核的权限。这两件事的门槛天差地别，第 07 节会展开。</p>
+    <p class="footnote">依据：<a href="https://kindlemodding.org/jailbreaking/index.html">KindleModding 社区说明</a></p>
+  </div>
+</details>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2"><span class="badge">02</span>KUAL 是怎样工作的，用什么语言</h2>
+
+<h3>菜单配置和真正的程序是两部分</h3>
+
+<p>传统 KUAL 扩展的目录结构：</p>
+
+<pre><code>extensions/example/
+  config.xml     <span class="cmt">扩展信息和菜单位置</span>
+  menu.json      <span class="cmt">按钮、子菜单、动作</span>
+  start.sh       <span class="cmt">按钮调用的脚本，也可调用其他程序</span>
+  bin/...        <span class="cmt">可选的设备可执行文件</span></code></pre>
+
+<p>关键认知：<code>XML</code> 和 <code>JSON</code> 只是<strong>描述数据</strong>（"叫什么、有几个按钮、点击执行什么"），它们不是负责联网、排版的脚本语言。真正干活的是 <code>action</code> 指向的程序。</p>
+
+<div class="diagram">
+  <div class="d-title">KUAL 扩展执行流程</div>
+  <div class="flow">
+    <div class="step"><div class="s-t">扫描 extensions/</div><div class="s-d">KUAL 发现扩展目录</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">读取菜单</div><div class="s-d">config.xml + menu.json</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">显示按钮</div><div class="s-d">按菜单配置渲染</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">点击执行 action</div><div class="s-d">shell 命令（/bin/ash）</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">目标程序运行</div><div class="s-d">如 koreader.sh</div></div>
+  </div>
+</div>
+
+<div class="box key">
+  <div class="box-title">"KUAL 插件用什么写"—— 分层回答</div>
+  <p><strong>菜单层：</strong>XML / JSON（数据描述）　<strong>动作层：</strong>经常是 shell 脚本</p>
+  <p><strong>更深层：</strong>动作可以启动 C / C++ / Rust 编译的原生程序，也可以运行设备上<strong>确实存在解释器</strong>的 Python / Lua 脚本。KUAL 不会自动附送语言解释器。</p>
+  <p class="footnote">依据：KUAL 菜单开发文档定义 action 为 shell 命令，传统环境使用 /bin/ash（<a href="https://wiki.mobileread.com/wiki/KUAL_What's_New">Mobileread Wiki</a>）</p>
+</div>
+
+<div class="box stop">
+  <div class="box-title">不能运行的东西</div>
+  <p>Windows 的 <code>.exe</code>、x86 Linux 程序、Android APK —— 都不会因为装了 KUAL 就能跑。程序必须<strong>匹配设备架构（ARM）与运行依赖</strong>。</p>
+</div>
+
+<h3>KUAL 自己也不等于 shell</h3>
+<p>KUAL 本体存在 Java Kindlet/Booklet 等形式，不同设备与固件包装不同。它自己只管菜单和启动；不能从"扩展常用 shell"推出"KUAL 本体全是 shell"。（参考：<a href="https://www.mobileread.com/forums/showthread.php?t=203326">KUAL 维护帖</a>）</p>
+
+<p>还有两个容易混为一谈的工具，三种操作互不相同：</p>
+<div class="tbl-wrap"><table>
+  <tr><th>操作</th><th>工具 / 方式</th><th>性质</th></tr>
+  <tr><td>安装扩展（复制目录到 extensions）</td><td>复制文件夹</td><td>利用 KUAL 的扩展协议</td></tr>
+  <tr><td>安装系统包</td><td>MRPI（MobileRead Package Installer）</td><td>处理安装包</td></tr>
+  <tr><td>刷写系统镜像</td><td>刷机流程</td><td>完全不同的操作</td></tr>
+</table></div>
+
+<details>
+  <summary>为什么 KUAL 能"装插件"？</summary>
+  <div class="d-body">
+    <p>因为开发者预先实现了一个"发现配置并执行动作"的扩展协议。所谓安装很多时候就是<strong>复制到约定目录</strong>。它不要求整个 Kindle 系统原生理解每一个新应用，只要 KUAL 能读菜单、系统能运行动作即可。</p>
+    <p>这种设计适合工具按钮、同步任务和启动入口；要做九宫格、长文排版、评论展开，就得让按钮启动独立程序、由那个程序自己实现界面。KUAL 没有提供完整内容阅读框架。</p>
+    <p>实际例子：KOReader 的 KUAL 菜单就是调用 <code>koreader.sh</code> 启动阅读器，含常规启动和"停止原生 framework"两种选项（<a href="https://github.com/koreader/koreader/blob/master/platform/kindle/extensions/koreader/menu.json">menu.json 源码</a>）。</p>
+  </div>
+</details>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3"><span class="badge">03</span>KOReader 为什么用 Lua，插件怎样进入阅读器</h2>
+
+<h3>不是 Kindle 规定必须用 Lua</h3>
+<p>Lua 是 <strong>KOReader 自己选择并集成</strong>的开发语言与扩展环境：体积小、可嵌入、适合编排界面与业务逻辑，便于脚本层跨设备复用（<a href="https://www.lua.org/about.html">Lua 官方介绍</a>）。这是架构适配性解释，不是对开发者历史决策的臆测。</p>
+
+<div class="box key">
+  <div class="box-title">"Lua 脚本会慢吗？"—— 不是每个像素都靠文本脚本解释</div>
+  <p>KOReader 入口由 <strong>LuaJIT</strong> 执行；底层排版、图片处理使用原生库。LuaJIT 的 <strong>FFI</strong> 能直接调用 C 函数（<a href="https://luajit.org/ext_ffi.html">FFI 文档</a>）。</p>
+  <p>反过来，改成 Rust/C 也<strong>不会自动让所有操作更快</strong>：联网瓶颈在网络、翻页瓶颈在屏幕刷新、长文瓶颈在布局——不同操作瓶颈不同，应该先测量哪一段耗时。原生程序还要承担更多构建、依赖与设备兼容工作。</p>
+</div>
+
+<h3>插件 = 主程序主动加载的代码</h3>
+
+<pre><code>koreader/plugins/example.koplugin/
+  main.lua       <span class="cmt">插件入口</span>
+  _meta.lua      <span class="cmt">名称、描述等元数据</span>
+  api.lua        <span class="cmt">可选模块</span>
+  reader.lua     <span class="cmt">可选模块</span></code></pre>
+
+<div class="diagram">
+  <div class="d-title">KOReader 插件加载与运行</div>
+  <div class="flow">
+    <div class="step"><div class="s-t">PluginLoader</div><div class="s-d">扫描 .koplugin 目录</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">加载入口 Lua</div><div class="s-d">读取 _meta.lua 元数据</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">实例化插件</div><div class="s-d">进入 KOReader 同一进程</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step"><div class="s-t">注册能力</div><div class="s-d">菜单 / 事件 / 控件 / 宿主 API</div></div>
+  </div>
+</div>
+
+<p>本仓库（<code>zhihu.koplugin</code>）就是这个过程：<code>main.lua</code> 通过 <code>registerToMainMenu</code> 注册"知乎"菜单项，点击后创建 API、缓存和 UI 对象。<strong>不是亚马逊系统安装了"知乎 App"，也没有执行知乎官方 APK。</strong></p>
+
+<div class="box warn">
+  <div class="box-title">这种机制的特点：整合深，但无隔离</div>
+  <p><strong>好处：</strong>可以共用字体、按钮、触摸事件和数据目录。</p>
+  <p><strong>代价：</strong>插件和宿主在同一进程工作——插件出错可能影响宿主，宿主接口更新可能影响插件。加载器里的异常捕获<strong>不是</strong> Android 那样的进程与权限隔离。</p>
+  <p class="footnote">依据：<a href="https://github.com/koreader/koreader/blob/master/frontend/pluginloader.lua">PluginLoader 源码</a></p>
+</div>
+
+<details>
+  <summary>能用其他语言写 KOReader 插件吗？</summary>
+  <div class="d-body">
+    <p>标准入口必须遵守 Lua 插件接口。必要时可以让 Lua 调用匹配设备的原生库或外部辅助进程，但会引入依赖、打包、通信与取消处理等额外复杂度。Python/JavaScript 文件放进 <code>.koplugin</code> 目录<strong>不会自动工作</strong>。</p>
+    <p>对当前项目：列表、请求组织、缓存和评论状态适合继续用 Lua；若出现<strong>经过测量的</strong>性能瓶颈，再考虑局部原生实现。没有理由只因为"脚本"两个字就推倒整个阅读环境。</p>
+  </div>
+</details>
+
+<!-- ============ 4 ============ -->
+<h2 id="s4"><span class="badge">04</span>EPUB 到底有什么，为什么能点击却不等于 App</h2>
+
+<p>EPUB 把 XHTML 内容、CSS、图片、字体、目录与元数据打包在一个容器里。它告诉阅读器"有哪些内容、怎样组织"，<strong>由阅读器负责</strong>解析、布局、翻页与链接导航。</p>
+
+<p>所以 EPUB 里可以有封面、目录、平台九宫格、文章列表、正文和评论章节。点按钮可以跳转到包内章节或外部链接——<em class="hl">有链接不代表能执行平台客户端逻辑</em>。</p>
+
+<div class="box warn">
+  <div class="box-title">EPUB 3 有脚本能力，但别按 Chrome 来设计</div>
+  <p>EPUB 3 标准允许描述脚本内容，但<strong>没有强制所有阅读器实现</strong> JavaScript、表单和 DOM，网络也可能受限。不能按 Chrome 的能力来设计要求通用兼容的 EPUB。（<a href="https://www.w3.org/TR/epub-rs-33/">W3C 阅读系统规范</a>）</p>
+</div>
+
+<h3>拿实际需求举例：纯 EPUB vs 配合 KOReader 插件</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>操作</th><th>纯 EPUB</th><th>配合 KOReader 插件</th></tr>
+  <tr><td>点"酷安"进入已下载目录</td><td><span class="yes">可以</span>（书内链接）</td><td><span class="yes">可以</span></td></tr>
+  <tr><td>阅读已打包文章与评论</td><td><span class="yes">可以</span></td><td><span class="yes">可以</span></td></tr>
+  <tr><td>点"刷新"拉最新热门</td><td><span class="no">不能</span>（无法作为通用可靠能力）</td><td><span class="yes">可以</span>（插件联网实现后）</td></tr>
+  <tr><td>评论加载下一页</td><td><span class="mid">只能</span>跳到已打包的下一章</td><td><span class="yes">可以</span>按需请求</td></tr>
+  <tr><td>登录、Cookie 更新</td><td><span class="no">不适合承担</span></td><td><span class="mid">需插件另行实现</span>，仍受数据源限制</td></tr>
+  <tr><td>在任意阅读器获得同样效果</td><td><span class="yes">静态内容较容易</span></td><td><span class="mid">插件行为依赖 KOReader</span></td></tr>
+</table></div>
+
+<div class="box key">
+  <div class="box-title">结论</div>
+  <p>如果做"EPUB 首页链接 → 插件处理"，<strong>EPUB 是入口外观，真正功能仍来自插件</strong>。KOReader 上游有 ReaderLink 链接扩展接口，但需要开发和设备验证，不会自动识别任意自定义按钮（<a href="https://github.com/koreader/koreader/blob/master/frontend/apps/reader/modules/readerlink.lua">ReaderLink 源码</a>）。</p>
+</div>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5"><span class="badge">05</span>三种方式的实际限制</h2>
+
+<div class="tbl-wrap"><table>
+  <tr><th>维度</th><th>KUAL 扩展</th><th>KOReader 插件</th><th>EPUB 文件</th></tr>
+  <tr><td>能否联网</td><td>可启动联网程序</td><td>可调用网络模块</td><td>取决于阅读器，<span class="no">不能假定</span></td></tr>
+  <tr><td>自带文章阅读 UI</td><td><span class="mid">菜单为主</span>，复杂阅读另做</td><td><span class="yes">有现成 UI</span> 可复用</td><td>由阅读器排版</td></tr>
+  <tr><td>运行官方 Android App</td><td><span class="no">不能</span></td><td><span class="no">不能</span></td><td><span class="no">不能</span></td></tr>
+  <tr><td>主要开发工作</td><td>启动脚本及目标程序</td><td>Lua 逻辑与宿主接口</td><td>生成内容与排版</td></tr>
+  <tr><td>生命周期</td><td>action 与外部程序自行负责</td><td>跟随 KOReader，需处理页面/任务关闭</td><td>文件无常驻任务</td></tr>
+  <tr><td>跨设备复用</td><td>二进制与系统调用常需适配</td><td><span class="yes">常规界面更易复用</span></td><td><span class="yes">静态内容兼容性好</span></td></tr>
+  <tr><td>评论与推荐数据</td><td colspan="3" style="text-align:center">KUAL / 插件：自己取得和组织 ｜ EPUB：只能保存已获得的数据</td></tr>
+  <tr><td><strong>对本项目的价值</strong></td><td>快捷入口或工具命令</td><td><strong>适合作为主要客户端</strong></td><td>适合作为离线合集</td></tr>
+</table></div>
+
+<div class="box stop">
+  <div class="box-title">插件不是权限升级器</div>
+  <p>平台要求登录、付费或验证时，换 KUAL / Lua / EPUB 都<strong>不会直接取得内容</strong>。若成功建立 Android 环境并运行平台官方 App，则可以利用 App 自己的登录与内容流程——那是<strong>不同的技术路径</strong>，不是给插件换个包装。</p>
+</div>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6"><span class="badge">06</span>"刷 Android"和"共用原内核运行 Android"要分开</h2>
+
+<p>通俗说法都叫"装安卓"，但下面两条路线的开发障碍、可恢复性和维护成本差别很大：</p>
+
+<div class="diagram">
+  <div class="routes">
+    <div class="route rA">
+      <h4>路线 A：启动另一套系统（完整移植/双启动）</h4>
+      <div class="node dim-n">原启动链</div>
+      <div class="varrow">↓ 接受目标启动镜像</div>
+      <div class="node">目标 Linux 内核</div>
+      <div class="varrow">↓</div>
+      <div class="node">Android 用户空间</div>
+      <div class="varrow">↓</div>
+      <div class="node">APK</div>
+      <ul>
+        <li>需让启动链接受目标内核/启动镜像</li>
+        <li>可能受安全启动、刷写权限限制</li>
+        <li>替换或双启动，取决于项目</li>
+      </ul>
+    </div>
+    <div class="route rB">
+      <h4>路线 B：保留 Kindle 内核，运行 Android 用户空间</h4>
+      <div class="node dim-n">原启动链</div>
+      <div class="varrow">↓ 不替换</div>
+      <div class="node hl-n">Kindle 原 Linux 内核</div>
+      <div class="varrow">↓ 分支</div>
+      <div class="node">原生 Kindle 用户空间 ＋ 适配后的 Android 用户空间</div>
+      <div class="varrow">↓</div>
+      <div class="node">APK</div>
+      <ul>
+        <li>可能结合 chroot、命名空间、兼容层、驱动桥接</li>
+        <li>不一定需要替换启动内核</li>
+        <li>实现细节需源码或运行证据确认</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="box warn">
+  <div class="box-title">两个"不等于"</div>
+  <p>① <strong>新机能运行 Android 环境 ≠ 已解锁安全启动</strong>——路线 B 不替换内核，不需要过安全启动这道门。</p>
+  <p>② <strong>共用内核 ≠ 复制几个安卓目录就能用</strong>——Android 仍依赖内核接口、进程通信（Binder）、图形、输入、电源与运行时（<a href="https://source.android.com/docs/core/architecture">AOSP 架构</a>、<a href="https://source.android.com/docs/core/architecture/hidl/binder-ipc">Binder 文档</a>）。普通 Linux chroot 不能自动获得 APK 兼容。</p>
+</div>
+
+<h3>墨卓目前查到了什么（待核查线索）</h3>
+<details>
+  <summary>证据现状：二手介绍 + 无法读取的一手来源</summary>
+  <div class="d-body">
+    <p><strong>用户提供线索：</strong>小红书上的个人开发、付费、闭源项目"墨卓"，见到 PW5 及更新机型的支持信息。</p>
+    <p><strong>搜索结果：</strong>找到称其"共享原内核、运行 Android 7.1"的二手介绍，但该页面明确标注 AIGC，<span class="no" style="color:var(--red)">不能据此确认</span>技术细节、价格、固件要求和支持名单。追溯到疑似原始笔记链接时，公开网页工具无法读取正文：</p>
+    <ul style="margin:8px 0 8px 20px; font-size:13.5px; color:var(--text-dim)">
+      <li><a href="https://www.xiaohongshu.com/explore/6ad6dd2e00000000250365b6">《墨卓：给 Kindle 装上安卓系统》线索</a>（未读取到正文）</li>
+      <li><a href="https://www.xiaohongshu.com/explore/6ae1f9c40000000028008136">PW5/Kindle 2022 适配更新线索</a>（未读取到正文）</li>
+    </ul>
+    <p><strong>可读的一手记录：</strong>2026-10-30 有用户在 Readest 仓库报告 Kindle 的 Android 7.1.1/ARMv7 容器环境安装失败（ABI 和最低系统版本不匹配，应用要求 Android 8）。它证明存在相应反馈，但没有明确设备型号和墨卓名称，<strong>不能</strong>证明 PW4 或墨卓的具体能力（<a href="https://github.com/readest/readest/issues/7158">Readest #7158</a>）。</p>
+    <p><strong>合适的当前判断：</strong>共享原内核值得作为独立候选研究；未证实它在 PW4 可用，也未证实墨卓为何没支持 PW4。</p>
+  </div>
+</details>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7"><span class="badge">07</span>为什么 PW4 可能比旧机更难：社区有什么证据</h2>
+
+<h3>先确认边界：能运行程序 ≠ 能启动任意内核</h3>
+<p>root 权限、系统更新包安装权限、fastboot 刷写权限、安全启动验证——<strong>不是同一个东西</strong>。原系统启动后能运行我们的程序，不证明下次启动会接受我们改过的内核。</p>
+
+<div class="diagram">
+  <div class="d-title">启动次序与信任边界</div>
+  <div class="flow">
+    <div class="step" style="border-color:#6a4a52"><div class="s-t">启动 ROM / 引导程序</div><div class="s-d">早期信任检查</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step" style="border-color:#6a4a52"><div class="s-t">验证并启动内核</div><div class="s-d">签名验证发生在这里</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step" style="border-color:#3d4a63"><div class="s-t">系统服务</div><div class="s-d"></div></div>
+    <div class="step-arrow">→</div>
+    <div class="step" style="border-color:#3d6a52"><div class="s-t">用户态应用</div><div class="s-d">越狱后常见扩展活动区</div></div>
+  </div>
+</div>
+
+<p>这就是为什么同一台机器能跑 KOReader、SSH、独立原生 App，却仍难以完整替换操作系统。</p>
+
+<h3>找到的三条社区原始记录</h3>
+<div class="gates" style="counter-reset:gate">
+  <div class="gate">
+    <div><div class="g-t">KindleModding 备份/恢复指南</div><div class="g-d">旧机恢复方法限定第 8 代及以前，明确指出 KT4/PW4 的分区布局和安全启动不同。<strong>表示那套旧方法不适用</strong>，不能扩大解读为所有恢复方法永远不存在。（<a href="https://kindlemodding.org/jailbreaking/Legacy/backing-up/">指南</a>）</div></div>
+  </div>
+  <div class="gate">
+    <div><div class="g-t">MobileRead《Debricking PW4》讨论（2026-09）</div><div class="g-d">报告者进入了 PW4 fastboot 但刷写命令受限；分析称解锁验证涉及 RSA 签名、缺少签名私钥。这是个人设备与逆向研究记录，<strong>不是</strong>发布的通用解锁器。（<a href="https://www.mobileread.com/forums/showthread.php?p=4608680">讨论原文</a>）</div></div>
+  </div>
+  <div class="gate">
+    <div><div class="g-t">PlainOS 发布说明</div><div class="g-d">只把 PW4 列作"近期发布"，读到的说明里没有解释延迟根因。<strong>不能</strong>把上面两条社区证据冒充 PlainOS 作者的结论。（<a href="https://fuquan.moe/posts/005-PlainOS-Release-Note.html">发布说明</a>）</div></div>
+  </div>
+</div>
+
+<div class="box good">
+  <div class="box-title">能下 / 不能下的结论</div>
+  <p><span style="color:var(--green)">✓ 能下：</span>PW4 确实存在与旧机不同的启动/刷写门槛。</p>
+  <p><span style="color:var(--red)">✗ 不能下：</span>PW4 一直未适配完全由某一个因素造成。</p>
+</div>
+
+<h3>为什么可能"旧机可以、新机也可以，中间的 PW4 不行"</h3>
+<p>兼容性不是沿型号编号自动递增的。旧机项目可能用<strong>可替换的旧内核</strong>；较新机项目可能<strong>保留原内核</strong>，只适配平台上已有的接口。二者跨过的是不同门槛，拼不成"只剩 PW4 无法解释"的线性名单。</p>
+
+<details>
+  <summary>若墨卓确实走共享内核路线，PW4 缺席的潜在原因（待排查方向）</summary>
+  <div class="d-body">
+    <p>原内核接口或构建配置不同 · 图形/输入桥接尚未适配 · 运行时的 CPU/ABI 要求 · 内存预算 · 开发者测试资源和维护优先级。</p>
+    <p><strong>这些是待排查方向，不是查明的墨卓拒绝支持理由。</strong>KOReader 对 PW4 和 PW5 也确实使用不同设备分类与初始化分支（<a href="https://github.com/koreader/koreader/blob/master/frontend/device/kindle/device.lua">设备适配源码</a>），说明型号要单独适配——但这不能证明其中哪一处是 Android 障碍。</p>
+  </div>
+</details>
+
+<div class="box stop">
+  <div class="box-title">不要未经测量就断言</div>
+  <p>"PW4 没有某条 CPU 指令"、"某个内核模块肯定缺失"——都不要说。判断应来自<strong>这台设备</strong>的 CPU features、内核版本/配置和可用接口；不要把别的 Kindle、其他 SoC 或商家宣传的参数代入。</p>
+</div>
+
+<!-- ============ 8 ============ -->
+<h2 id="s8"><span class="badge">08</span>有 AI 后能不能突破</h2>
+
+<p>AI 能降低个人做系统研究的成本，但结果取决于<strong>缺的到底是什么</strong>：</p>
+
+<div class="tbl-wrap"><table>
+  <tr><th>问题</th><th>AI 可以帮助什么</th><th>仍需什么证据</th></tr>
+  <tr><td>配置、脚本或构建错误</td><td>读日志、比源码、修脚本与交叉编译</td><td>编译通过 <strong>＋</strong> 真机行为</td></tr>
+  <tr><td>API/ABI 不匹配</td><td>分析依赖，选运行时与构建目标</td><td>目标设备确实支持所需接口与指令</td></tr>
+  <tr><td>图形、触摸、电源适配</td><td>理解接口、写桥接、分析崩溃</td><td>真机屏幕/输入测试、反复休眠唤醒</td></tr>
+  <tr><td>Android 所需内核能力不足</td><td>分析可用接口、可加载模块或替代实现</td><td>实际内核配置、权限、可行实现</td></tr>
+  <tr><td><strong>安全启动/签名门槛</strong></td><td>研究已有公开机制和漏洞，识别错误假设</td><td><span class="no">真正有效的启动路径</span>；不能靠生成字符串代替私钥</td></tr>
+  <tr><td>物理内存与屏幕刷新限制</td><td>优化内存、减少后台和重绘</td><td>仍受硬件上限约束</td></tr>
+  <tr><td>闭源付费环境</td><td>评估文档、运行信息及兼容性</td><td>不能默认取得源码或保证可修改</td></tr>
+</table></div>
+
+<div class="box key">
+  <div class="box-title">签名门槛不是"代码写得不够多"</div>
+  <p>知道验证算法和公钥，不代表拥有生成有效签名的<strong>私钥</strong>。AI 写出一条签名命令，不代表签名能被设备接受。研究可能发现别的路径，但不能预先承诺。</p>
+</div>
+
+<div class="box good">
+  <div class="box-title">当下结论</div>
+  <p><strong>技术上值得研究，交付上不能把"有 AI"当作 PW4 Android 必然成功的前提。</strong>适合个人的推进方式：先找共享原内核的最小可行路径，把问题拆成可验证的小块，尽量不以解锁启动链为第一步。</p>
+</div>
+
+<h3>如果要实际研究，分三阶段走</h3>
+<div class="gates">
+  <div class="gate"><div><div class="g-t">第一阶段：只读信息 + 开发机验证</div><div class="g-d">查明固件/机型、CPU 架构、内核版本与配置来源、可用内核接口、内存/存储预算；明确目标 Android 用户空间及其必要依赖。<strong>读不到的配置就记录为"未知"，不拿未知当支持或不支持的证据。</strong></div></div></div>
+  <div class="gate"><div><div class="g-t">第二阶段：最小用户空间验证</div><div class="g-d">先证明最小程序、所需进程通信、图形输出和输入可用，再考虑运行时、包管理和一个轻量 App。每一步单独记录"成功了哪一层"，<strong>不把启动画面当系统完成</strong>。</div></div></div>
+  <div class="gate"><div><div class="g-t">第三阶段：真实阅读验收</div><div class="g-d">目标 App 登录、联网、章节加载、评论、断网重读、退出、USB 模式，以及真实的 CPU suspend 和重复唤醒。<strong>屏幕黑了不等于 CPU 睡了。</strong></div></div></div>
+</div>
+
+<p class="footnote">本文档没有执行上述任何设备实验。若未来进行硬件研究，应作为与阅读插件分开的实验路线，并保留目前可用的阅读环境。</p>
+
+<!-- ============ 9 ============ -->
+<h2 id="s9"><span class="badge">09</span>即使 Android 成功，知乎、微信读书、番茄能不能用</h2>
+
+<h3>五道门槛，依次通过</h3>
+<div class="gates">
+  <div class="gate"><div><div class="g-t">能安装</div><div class="g-d">APK 的 <code>minSdkVersion</code> 不高于运行环境，原生库 ABI 匹配。</div></div></div>
+  <div class="gate"><div><div class="g-t">能启动</div><div class="g-d">运行时、原生库、WebView 和系统 API 满足实际调用。</div></div></div>
+  <div class="gate"><div><div class="g-t">能登录和取内容</div><div class="g-d">当前服务端仍接受该客户端，登录流程与权限正常。</div></div></div>
+  <div class="gate"><div><div class="g-t">能舒服阅读</div><div class="g-d">字体、翻页、残影、图片、评论与导航符合期待。</div></div></div>
+  <div class="gate"><div><div class="g-t">能长期使用</div><div class="g-d">休眠恢复、稳定性、离线、进度和耗电通过验收。</div></div></div>
+</div>
+<p class="footnote">依据：<a href="https://developer.android.com/guide/topics/manifest/uses-sdk-element">Android 最低 SDK 文档</a>、<a href="https://developer.android.com/ndk/guides/abis">ABI 文档</a>。APK 下载体积 ≠ 运行内存占用。</p>
+
+<div class="box stop">
+  <div class="box-title">改 minSdkVersion 数字没有用</div>
+  <p>把 APK 的最低版本数字改低，<strong>不会补齐</strong>缺失的 API、原生库或服务。开源 App 可以查依赖后做真正的兼容移植；闭源 App 不能仅凭改安装包声明保证能用。Readest #7158 就是近期实例：64 位包和旧系统版本分别导致不同安装错误，维护者也没提供旧系统支持。</p>
+</div>
+
+<h3>对你提到的软件，当前判断</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>软件</th><th>PW4 原系统 + KUAL/KOReader（现状）</th><th>假设未来 Android 成功</th><th>证据边界</th></tr>
+  <tr><td><strong>知乎官方 App</strong></td><td><span class="no">不能</span>直接安装 APK；现有插件是另写的客户端</td><td>必须核对版本 SDK、ABI、登录与内容访问</td><td>信息流/图片/评论连续加载负担更大；未做 PW4 APK 测试，不承诺流畅</td></tr>
+  <tr><td><strong>微信读书墨水屏 App</strong></td><td><span class="no">不能</span>直接执行 APK；网页/插件是其他路径</td><td><span class="mid">较值得优先验收</span>的阅读 App</td><td>官方确有墨水屏版本（<a href="https://ink.weread.qq.com/">ink.weread.qq.com</a>）；不能用其他机型经验保证 PW4 可用</td></tr>
+  <tr><td><strong>番茄小说官方 App</strong></td><td><span class="no">不能</span>直接运行 APK</td><td>需核对实际 APK 和系统服务依赖</td><td>章节阅读可能与首页/广告/推荐负担不同；"能读一章"≠全功能流畅</td></tr>
+  <tr><td><strong>简单离线 EPUB/TXT 阅读器</strong></td><td><span class="yes">已有 KOReader</span> 可完成</td><td>可挑匹配系统/ABI 的轻量 App</td><td>只为本地书的话，新增整套 Android 收益较小</td></tr>
+</table></div>
+
+<p class="footnote">已核对官方入口：知乎下载页、微信读书墨水屏版、番茄下载页。这些页面不能证明当前安装包在 PW4 的兼容性；本次没有下载、解析或安装上述 APK，不编造最低 Android 版本、内存占用和速度数字。第三方下载站的"支持 Android 4.4"等描述不能当成已核验结果。</p>
+
+<h3>"卡不卡"要分操作测</h3>
+<details>
+  <summary>基于工作负载的预期（不是 PW4 Android 跑分）</summary>
+  <div class="d-body">
+    <p><strong>容易优化的：</strong>静态纯文本、预缓存翻页。<strong>吃 CPU/内存/网络的：</strong>冷启动、搜索、书架封面、加载评论、多图信息流。Android 还要运行自身系统服务，而当前插件可以只实现所需的阅读流程。</p>
+    <p>PW4 只有 <strong>512 MB 内存</strong>，资源预算很紧。即使关闭原生界面释放了一部分内存，也不能把"剩余内存"全部视为单个 App 的可用空间——额外运行时、系统服务、图片解码与页面缓存都要占内存。参考数据可用 Aristotle 的历史测量（<a href="https://github.com/piotrkowski/aristotle/blob/main/docs/benchmarks.md">benchmarks.md</a>），但那是原生阅读口径，不能代替 Android 下的测量。</p>
+    <p><strong>实测应分别记录：</strong>首次/再次启动、书架打开、搜索、开一本书、连续 30 次翻页、加载评论、退出重进、断网重读、休眠后恢复。速度用中位数和较慢样本，不能只挑最顺的一次；续航在相同前光、联网、阅读时间条件下比较，不能由低内存占用推导省电。</p>
+    <p><strong>决策建议：</strong>如果最需要微信读书，先以"能持续读书、同步位置、待机正常"为目标；如果最需要知乎与多平台完整推荐、评论，性能与兼容门槛更高，应按真实工作负载决定是否值得继续。</p>
+  </div>
+</details>
+
+<!-- ============ 10 ============ -->
+<h2 id="s10"><span class="badge">10</span>Aristotle 是什么，和 KOReader、Android 有什么关系</h2>
+
+<p>指的是 <a href="https://github.com/piotrkowski/aristotle">piotrkowski/aristotle</a>（不是同名 AI/数学项目）。它是<strong>面向 PW4 的原生书库与阅读器</strong>，Rust 工程，结合 Plato/MuPDF 等排版渲染组件及设备接口代码。</p>
+
+<div class="box key">
+  <div class="box-title">定位一句话</div>
+  <p>保留 Kindle 底层环境，运行期间接管界面、停下部分原生服务，退出时恢复原生界面。这是<strong>"为旧 Kindle 写一套更轻的阅读应用"</strong>——不是把设备刷成 Android，也不是给 KOReader 装皮肤。可通过 KUAL 启动，另有涉及 USB SSH 等的辅助服务（辅助服务名 <code>agent</code> 不代表设备上有 AI 常驻）。</p>
+</div>
+
+<h3>它能带来什么 / 还差什么</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>方面</th><th>现状</th></tr>
+  <tr><td>功能</td><td>本地书库、阅读位置、字典、批注、字体；格式支持有具体限制（EPUB、PDF、TXT、部分无 DRM MOBI 等）</td></tr>
+  <tr><td>平台内容</td><td><span class="no">不提供</span>知乎/微信读书/番茄的运行环境；用 MuPDF 也不自动支持所有格式</td></tr>
+  <tr><td>性能</td><td>公布过 PW4 上较小的阅读进程内存和翻页测量，说明定制原生应用有优化空间；但测量基于特定固件/构建/样例，部分是历史值，不能概括为通用性能倍数</td></tr>
+  <tr><td><strong>中文支持</strong></td><td>文档与默认字体/语言配置重点在拉丁文字、希腊文，界面仅英语和波兰语。<strong>可添加字体 ≠ 中文阅读已验收</strong>——需实际检查中文字体覆盖、标点禁则、混排、换行、搜索、字典和复杂 EPUB。文档没有中文不证明永远不支持，但不能直接推荐给中文主力阅读场景</td></tr>
+  <tr><td>兼容范围</td><td>安装说明限定 PW4 2018/PQ94WIF、固件 5.13.x，其他型号固件列为不支持；项目属实验阶段，本次未核对本机固件</td></tr>
+  <tr><td>电源</td><td>临时辅助程序的测试成功 ≠ App 自身完整通过反复休眠/唤醒；电池消耗仍待验证（<a href="https://github.com/piotrkowski/aristotle/blob/main/docs/power-validation.md">power-validation.md</a>）</td></tr>
+</table></div>
+
+<div class="box good">
+  <div class="box-title">对本项目最有价值的启发</div>
+  <p>不一定要换操作系统——<strong>也可以在原 Linux 环境中做出专用阅读体验</strong>。它的设备适配、刷新与状态恢复经验值得研究。但要改造成多平台信息阅读器，仍需自己实现平台获取、正文模型、评论、缓存与导航——现有 KOReader 插件已拥有其中一部分，<strong>不建议仅因它更轻就立即迁移</strong>。</p>
+</div>
+
+<!-- ============ 11 ============ -->
+<h2 id="s11"><span class="badge">11</span>按目标选择，而不是按"改得深不深"选择</h2>
+
+<div class="tbl-wrap"><table>
+  <tr><th>你最在意的目标</th><th>更合理的当前路线</th><th>什么情况值得转向</th></tr>
+  <tr><td>PW4 上看书 + 少量信息流，接受专用界面</td><td><strong>保留 KOReader</strong>，平台模块独立，KUAL 提供入口</td><td>宿主确有无法解决的限制，且有独立 App 实测收益</td></tr>
+  <tr><td>跨平台热门、正文和评论，重视离线</td><td><strong>共用模型与缓存的 KOReader 客户端</strong></td><td>某些平台接口长期不可用，再比较其官方 App 路线</td></tr>
+  <tr><td>把内容带上地铁长期保存</td><td><strong>导出 EPUB / 离线内容包</strong></td><td>需要刷新时回到应用获取</td></tr>
+  <tr><td>官方 App 的书架、段评、推荐与完整功能</td><td><strong>Android 环境</strong>或原生 Android 设备</td><td>PW4 共享内核实验真正跑通指定 App 后再评估</td></tr>
+  <tr><td>学习系统移植和底层工程</td><td><strong>PW4 Android 作为独立研究项目</strong></td><td>接受不确定结果，先有明确的接口、资源和恢复依据</td></tr>
+  <tr><td>更轻的本地书库与原生 UI</td><td><strong>研究 Aristotle</strong></td><td>固件符合，中文、电源和个人工作流验收通过</td></tr>
+</table></div>
+
+<div class="box good">
+  <div class="box-title">现阶段的建议（保持不变）</div>
+  <p>多平台插件<strong>照常研究</strong>，Android 作为<strong>独立候选</strong>；不要让系统移植的不确定性阻塞已有阅读器的进展。也不应因选了插件就否认 Android 官方 App 在内容功能上的价值——两条路线可以并行评估，但成功条件不能混淆。</p>
+</div>
+
+<!-- ============ 12 ============ -->
+<h2 id="s12"><span class="badge">12</span>尚未解决的问题</h2>
+
+<div class="box stop">
+  <div class="box-title">当前证据缺口清单</div>
+  <p>① 未读到可核验的<strong>墨卓开发者技术说明</strong>——不确认其实现、支持名单、内核要求及 PW4 缺席原因。</p>
+  <p>② 未发现 <strong>PlainOS 作者</strong>就 PW4 延迟给出的明确根因说明；目前只能结合社区启动链证据解释难点。</p>
+  <p>③ 未读取这台 PW4 的<strong>固件、CPU features、内核配置与运行内存</strong>；未运行 Android 最小实验。</p>
+  <p>④ 未检查知乎、微信读书、番茄具体 APK 的<strong>最低 SDK、ABI、原生依赖与签名</strong>；没有 PW4 运行速度/续航数据。</p>
+  <p>⑤ 未在设备测试 <strong>Aristotle</strong>；中文排版和日用电源行为不作可用承诺。</p>
+</div>
+
+<div class="divider-note">
+  <p>本文为学习讲解版，内容整理自 <code>KINDLE_PLATFORM_EXPLAINED.md</code>（2026-11-03）。所有外部链接均指向原文档核对过的来源。可配合 <code>MULTIPLATFORM_RESEARCH.md</code>（多平台架构调研）与 <code>TODO.md</code>（任务记录）阅读。文档可在取得原始说明、具体安装包和设备数据后继续更新。</p>
+</div>
+
+</main>
+</div>
+
+<script>
+// TOC 高亮当前章节
+const links = document.querySelectorAll('nav.toc a');
+const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+function updateToc() {
+  const y = window.scrollY + 120;
+  let idx = 0;
+  sections.forEach((s, i) => { if (s && s.offsetTop <= y) idx = i; });
+  links.forEach((a, i) => a.classList.toggle('active', i === idx));
+}
+window.addEventListener('scroll', updateToc, { passive: true });
+updateToc();
+</script>
+</body>
+</html>
