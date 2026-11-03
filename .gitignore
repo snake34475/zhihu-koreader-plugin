@@ -39,6 +39,10 @@ work/
 *.jpg
 *.jpeg
 
+# 设计稿导出图是交付物，需要入库（覆盖上面的 *.png 规则）
+!kual/design/
+!kual/design/*.png
+
 # 本地工具状态，不入库
 .workbuddy/
 .DS_Store

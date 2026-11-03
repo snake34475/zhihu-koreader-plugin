@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知乎 Kindle 阅读器 · 24 屏设计稿总览</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#FFFFFF;color:#000;
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif;
+  padding:56px 48px 96px;
+}
+header{border-bottom:1px solid #000;padding-bottom:20px;margin-bottom:8px;display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap}
+h1{font-size:26px;font-weight:700;letter-spacing:.01em}
+.meta{font-size:12px;line-height:1.9;color:#6E6E6E;text-align:right}
+.meta a{color:#000;text-decoration:none;border-bottom:1px solid #000}
+.meta code{font-family:"Inter",monospace;font-size:11px}
+h2{
+  font-size:12px;font-weight:600;letter-spacing:.14em;color:#6E6E6E;
+  margin:44px 0 18px;padding-bottom:10px;border-bottom:1px solid #C8C8C8;
+}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:28px 24px}
+.card{display:block;text-decoration:none;color:inherit}
+.thumb{border:1px solid #C8C8C8;background:#FFF;overflow:hidden;transition:border-color .1s}
+.card:hover .thumb{border-color:#000}
+.thumb img{display:block;width:100%;height:auto}
+.cap{display:flex;gap:10px;align-items:baseline;margin-top:10px}
+.cap .n{font-family:"Inter",sans-serif;font-size:11px;color:#9A9A9A;font-variant-numeric:tabular-nums}
+.cap .t{font-size:13px;font-weight:500;line-height:1.5}
+.note{
+  margin-top:56px;border-top:1px solid #C8C8C8;padding-top:20px;
+  font-size:12px;line-height:2;color:#6E6E6E;
+}
+.note b{color:#000;font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>知乎 Kindle 阅读器 · 24 屏灰阶设计稿</h1>
+  <div class="meta">
+    Kindle Paperwhite 4 ｜ 1072 × 1448 ｜ 灰阶<br>
+    画布 <code>743489512057938</code> ｜ 导出尺寸 1:1<br>
+    <a href="https://ardot.tencent.com/file/743489512057938">在 Ardot 打开可编辑原稿</a>
+  </div>
+</header>
+
+<div id="sections"></div>
+
+<div class="note">
+  <b>这页只是索引。</b>图片是设计稿的静态导出，导出时点：2026-11-03，1:1 尺寸（1072 × 1448 灰阶 PNG）。<br>
+  可点击的交互原型在 <code>../prototype/index.html</code>，尺寸、字阶、灰阶与这里的稿子一致。<br>
+  改稿请回到 Ardot 原稿；本目录的 PNG 需要重新导出才会同步。
+</div>
+
+<script>
+const DATA = [
+  {sec:'规范', items:[
+    ['00','封面','00-cover.png'],
+    ['01','信息架构与用户路径','01-information-architecture.png'],
+    ['02','视觉体系：灰阶与字阶','02-visual-system.png'],
+    ['03','组件与尺寸规范','03-components.png'],
+    ['04','方向对比与结论','04-direction-comparison.png']
+  ]},
+  {sec:'P0 页面', items:[
+    ['05','热榜首页','05-hot-list.png'],
+    ['06','推荐列表','06-recommend.png'],
+    ['07','问题与回答列表','07-question-answers.png'],
+    ['08','回答阅读页','08-answer-reading.png'],
+    ['09','阅读页 · 快捷设置','09-reading-quick-settings.png'],
+    ['10','评论页','10-comments.png'],
+    ['11','子回复 · 全屏页（推荐）','11-replies-fullscreen.png'],
+    ['12','子回复 · 弹窗（备选）','12-replies-sheet-alt.png'],
+    ['13','离线页','13-offline.png'],
+    ['14','直答页','14-direct-answer.png'],
+    ['15','设置与账号','15-settings-account.png']
+  ]},
+  {sec:'状态', items:[
+    ['16','状态 · 仅摘要','16-state-summary-only.png'],
+    ['17','状态 · 正文受限','17-state-body-restricted.png'],
+    ['18','状态 · 登录失效','18-state-session-expired.png'],
+    ['19','状态 · 空与断网','19-state-empty-offline.png']
+  ]},
+  {sec:'暗黑与备选方向', items:[
+    ['20','暗黑 · 首页','20-dark-home.png'],
+    ['21','暗黑 · 阅读页','21-dark-reading.png'],
+    ['22','方向 B · 首页（卡片流，未采用）','22-direction-b-home.png'],
+    ['23','方向 B · 阅读页（杂志式，未采用）','23-direction-b-reading.png']
+  ]}
+];
+
+const root = document.getElementById('sections');
+for(const s of DATA){
+  const h = document.createElement('h2');
+  h.textContent = s.sec;
+  root.appendChild(h);
+
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  for(const [n, title, file] of s.items){
+    const a = document.createElement('a');
+    a.className = 'card';
+    a.href = file;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.title = title + ' · 点击查看 1072×1448 原图';
+    a.innerHTML = '<div class="thumb"><img src="' + file + '" alt="' + title + '" loading="lazy"></div>'
+                + '<div class="cap"><span class="n">' + n + '</span><span class="t">' + title + '</span></div>';
+    grid.appendChild(a);
+  }
+  root.appendChild(grid);
+}
+</script>
+</body>
+</html>

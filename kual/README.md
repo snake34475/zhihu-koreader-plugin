@@ -8,7 +8,8 @@
 
 | 交付物 | 位置 | 说明 |
 |---|---|---|
-| 设计稿（24 屏） | <https://ardot.tencent.com/file/743489512057938> | 1072 × 1448 灰阶，画布 5 列 × 5 行，按分区排布 |
+| 设计稿（24 屏，可编辑） | <https://ardot.tencent.com/file/743489512057938> | 1072 × 1448 灰阶，画布 5 列 × 5 行，按分区排布 |
+| 设计稿（24 屏，PNG 备份） | [`design/index.html`](design/index.html) | 本地总览页，点开看 1:1 原图；不登录 Ardot 也能看 |
 | 可点击原型 | [`prototype/index.html`](prototype/index.html) | 单文件，无依赖，双击用浏览器打开 |
 | UI 产品需求 | [`PRODUCT_REQUIREMENTS.md`](PRODUCT_REQUIREMENTS.md) | 功能基线、9 个 P0 页面、墨水屏约束、设计交付要求 |
 | 本索引 | `README.md` | 屏幕清单、原型用法、规格 token、待办 |
@@ -19,63 +20,66 @@
 git clone git@github.com:snake34475/zhihu-koreader-plugin.git
 cd zhihu-koreader-plugin
 git checkout kual-native-reader          # 交付物在这个分支，不在 main
-open kual/prototype/index.html           # 原型：不需要服务器，不需要联网
+open kual/design/index.html              # 24 屏总览，不联网也能看
+open kual/prototype/index.html           # 可点击原型
 ```
 
 > 新机器上直接 `git clone` 默认落在 `main`，看不到本目录。务必先切到 `kual-native-reader`。
 
-- 设计稿在 Ardot 云端，需要**同一个账号**才有权限；没有权限时，本文档的屏幕清单与规格表仍然够用，原型也能完整走查。
+- 只有**改稿**需要 Ardot 权限（同一个账号）。只是看图、走查、转写规格，`design/` 里的 PNG 与本文档就够。
 - 原型是纯静态文件，`file://` 直接打开即可；要放到局域网给别的机器看，在 `kual/prototype/` 里跑 `python3 -m http.server 8000`。
 - KUAL 只负责启动；独立版需要自己的界面、设备适配和会话管理。现有 `zhihu.koplugin` 继续在 `main` 分支维护，不能直接当作 KUAL 程序运行。
 
 ## 设计稿：24 屏
 
-画布坐标：列距 1192，行距 1568，每屏 1072 × 1448。直达链接格式为
-`https://ardot.tencent.com/file/743489512057938?node_id=<node_id>`（冒号需写成 `%3A`）。
+画布坐标：列距 1192，行距 1568，每屏 1072 × 1448。「图」是仓库内的 PNG 备份，「直达」是 Ardot 里对应画板的链接
+（格式 `https://ardot.tencent.com/file/743489512057938?node_id=<node_id>`，冒号写成 `%3A`）。
 
 ### 规范（第 1 行）
 
-| # | 屏幕 | node_id | 直达 |
-|---|---|---|---|
-| 00 | 封面 | `2:1` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1) |
-| 01 | 信息架构与用户路径 | `2:19` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A19) |
-| 02 | 视觉体系（灰阶与字阶） | `2:35` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A35) |
-| 03 | 组件与尺寸规范 | `2:1017` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1017) |
-| 04 | 方向对比与结论 | `2:1045` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1045) |
+| # | 屏幕 | 图 | node_id | 直达 |
+|---|---|---|---|---|
+| 00 | 封面 | [PNG](design/00-cover.png) | `2:1` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1) |
+| 01 | 信息架构与用户路径 | [PNG](design/01-information-architecture.png) | `2:19` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A19) |
+| 02 | 视觉体系（灰阶与字阶） | [PNG](design/02-visual-system.png) | `2:35` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A35) |
+| 03 | 组件与尺寸规范 | [PNG](design/03-components.png) | `2:1017` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1017) |
+| 04 | 方向对比与结论 | [PNG](design/04-direction-comparison.png) | `2:1045` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A1045) |
 
 ### P0 页面（第 2–3 行）
 
-| # | 屏幕 | node_id | 直达 |
-|---|---|---|---|
-| 05 | 热榜首页 | `2:102` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A102) |
-| 06 | 推荐列表 | `2:307` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A307) |
-| 07 | 问题与回答列表 | `2:347` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A347) |
-| 08 | 回答阅读页 | `2:384` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A384) |
-| 09 | 阅读页 · 快捷设置 | `2:491` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A491) |
-| 10 | 评论页 | `2:509` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A509) |
-| 11 | 子回复 · 全屏页（推荐） | `2:545` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A545) |
-| 12 | 子回复 · 弹窗（备选） | `2:582` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A582) |
-| 13 | 离线页 | `2:647` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A647) |
-| 14 | 直答页 | `2:692` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A692) |
-| 15 | 设置与账号 | `2:723` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A723) |
+| # | 屏幕 | 图 | node_id | 直达 |
+|---|---|---|---|---|
+| 05 | 热榜首页 | [PNG](design/05-hot-list.png) | `2:102` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A102) |
+| 06 | 推荐列表 | [PNG](design/06-recommend.png) | `2:307` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A307) |
+| 07 | 问题与回答列表 | [PNG](design/07-question-answers.png) | `2:347` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A347) |
+| 08 | 回答阅读页 | [PNG](design/08-answer-reading.png) | `2:384` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A384) |
+| 09 | 阅读页 · 快捷设置 | [PNG](design/09-reading-quick-settings.png) | `2:491` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A491) |
+| 10 | 评论页 | [PNG](design/10-comments.png) | `2:509` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A509) |
+| 11 | 子回复 · 全屏页（推荐） | [PNG](design/11-replies-fullscreen.png) | `2:545` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A545) |
+| 12 | 子回复 · 弹窗（备选） | [PNG](design/12-replies-sheet-alt.png) | `2:582` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A582) |
+| 13 | 离线页 | [PNG](design/13-offline.png) | `2:647` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A647) |
+| 14 | 直答页 | [PNG](design/14-direct-answer.png) | `2:692` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A692) |
+| 15 | 设置与账号 | [PNG](design/15-settings-account.png) | `2:723` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A723) |
 
 ### 状态（第 4 行）
 
-| # | 屏幕 | node_id | 直达 |
-|---|---|---|---|
-| 16 | 仅摘要 | `2:776` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A776) |
-| 17 | 正文受限 | `2:806` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A806) |
-| 18 | 登录失效 | `2:832` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A832) |
-| 19 | 空与断网 | `2:853` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A853) |
+| # | 屏幕 | 图 | node_id | 直达 |
+|---|---|---|---|---|
+| 16 | 仅摘要 | [PNG](design/16-state-summary-only.png) | `2:776` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A776) |
+| 17 | 正文受限 | [PNG](design/17-state-body-restricted.png) | `2:806` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A806) |
+| 18 | 登录失效 | [PNG](design/18-state-session-expired.png) | `2:832` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A832) |
+| 19 | 空与断网 | [PNG](design/19-state-empty-offline.png) | `2:853` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A853) |
 
 ### 暗黑与备选方向（第 5 行）
 
-| # | 屏幕 | node_id | 直达 |
-|---|---|---|---|
-| 20 | 暗黑 · 首页 | `2:879` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A879) |
-| 21 | 暗黑 · 阅读页 | `2:926` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A926) |
-| 22 | 方向 B · 首页（卡片流，未采用） | `2:955` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A955) |
-| 23 | 方向 B · 阅读页（杂志式，未采用） | `2:995` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A995) |
+| # | 屏幕 | 图 | node_id | 直达 |
+|---|---|---|---|---|
+| 20 | 暗黑 · 首页 | [PNG](design/20-dark-home.png) | `2:879` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A879) |
+| 21 | 暗黑 · 阅读页 | [PNG](design/21-dark-reading.png) | `2:926` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A926) |
+| 22 | 方向 B · 首页（卡片流，未采用） | [PNG](design/22-direction-b-home.png) | `2:955` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A955) |
+| 23 | 方向 B · 阅读页（杂志式，未采用） | [PNG](design/23-direction-b-reading.png) | `2:995` | [打开](https://ardot.tencent.com/file/743489512057938?node_id=2%3A995) |
+
+> PNG 是 2026-11-03 的 1:1 导出，**不会跟着画布自动更新**；改稿后需要重新导出。
 
 ## 原型怎么用
 
@@ -93,7 +97,7 @@ open kual/prototype/index.html           # 原型：不需要服务器，不需�
 
 ### 直达某一屏（地址栏 hash）
 
-`#reading`、`#comments`、`#replies`、`#offline`、`#settings`、`#login`、`#empty`、`#menu`、`#sheet`、`#limited`、`#excerpt`、`#result`、`#direct`、`#recommend`、`#question`、`#hot`
+`#hot`、`#recommend`、`#question`、`#reading`、`#comments`、`#replies`、`#offline`、`#settings`、`#login`、`#empty`、`#menu`、`#sheet`、`#limited`、`#excerpt`、`#result`、`#direct`
 加 `-dark` 为暗黑版（如 `#reading-dark`）；加 `?solo=1` 隐藏评审台、按 1:1 渲染，适合截图。
 
 ### 原型与设计稿的差异（有意为之）
@@ -101,10 +105,13 @@ open kual/prototype/index.html           # 原型：不需要服务器，不需�
 | 点 | 设计稿 | 原型 |
 |---|---|---|
 | 阅读翻页 | 整屏分页 | 连续滚动（浏览器行为，真机按分页实现） |
+| 子回复分页 | 底部「上一页 / 第 1 / 3 页 / 下一页」 | 「下一批回复」按钮，一次 6 条 |
+| 空状态 | 有图标、黑色离线提示条、黑底主按钮 | 纯文字 + 描边按钮，更简 |
 | 前光亮度 | 有档位控件 | 只显示数值，Mac 无法驱动 Kindle 前光 |
 | 暗黑主按钮 | 仅在 20 / 21 两屏体现 | 主按钮与分段选中改为描边，避免黑底白块 |
 | 推荐批次 | 06 屏有上一批 / 下一批 | 补充了批次条与翻批行为 |
 | 二维码 | 阅读页次级操作 | 只提示「可生成二维码用手机打开」，未画码 |
+| 示例文案 | 一套虚构问题（地铁读书等） | 另一套虚构问题（地铁读长文等），仅用于检验排版 |
 
 ## 规格 token（原生实现直接照抄）
 
@@ -139,3 +146,4 @@ open kual/prototype/index.html           # 原型：不需要服务器，不需�
 - [ ] 原型转写为原生界面（布局、字阶、灰阶已按上表固定）
 - [ ] PW4 实机验收：翻页全刷频率、前光档位实际能力、触摸热区、启动耗时
 - [ ] 把原型的滚动改为分页后，确认长文分段与「回答结束」位置
+- [ ] 阅读页与子回复页补齐设计稿里的底部页码条，和真机分页保持一致
