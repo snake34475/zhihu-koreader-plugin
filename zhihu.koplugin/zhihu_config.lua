@@ -9,6 +9,7 @@ Config.defaults = {
     model = "zhida-fast-1p5",
     reader_side = "left", -- 阅读页高频按钮列位置：left / right
     download_images = false, -- Reserved for P1; MVP never fetches images.
+    remember_login = false,
 }
 Config.models = { "zhida-fast-1p5", "zhida-thinking-1p5", "zhida-agent" }
 
@@ -47,6 +48,8 @@ function Config.validate(key, value)
         if value ~= "left" and value ~= "right" then return nil, "按钮列只能位于左侧或右侧。" end
     elseif key == "download_images" then
         if value ~= false then return nil, "图片下载将在 P1 加入，当前仅显示文字。" end
+    elseif key == "remember_login" then
+        if type(value) ~= "boolean" then return nil, "保持登录设置无效。" end
     else
         return nil, "未知配置项。"
     end

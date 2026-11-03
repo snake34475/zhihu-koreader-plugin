@@ -40,6 +40,6 @@ KOReader 对接参考的是官方仓库的 [socketutil](https://github.com/korea
 
 用户可在本机运行 `tools/zhihu_cookie_import.py`，只需隐藏输入 Cookie，即验证 `GET /api/v4/me` 并临时交接；详细内容诊断仍可运行 `tools/zhihu_cookie_probe.py`，该脚本另需回答链接。两者都仅白名单保留 `_xsrf`、`_zap`、`d_c0`、`BEC`、`sec_token`、`z_c0`，通过 SSH stdin 发给 PW4；先验证热榜、`GET /api/v4/me`、单条回答详情和评论两页。任何挑战或探针失败时，不创建会话交接文件。
 
-所有探针阶段通过后，脚本把带 Unix 时间戳的白名单 Cookie 原子写入设备 `/tmp/zhihu-cookie-import`，有效期 600 秒，文件权限为 0600。PW4 的 `/tmp` 是临时 RAM 文件系统；KOReader 设置页的“导入电脑临时传入的浏览器会话”会读取并立即删除交接文件，再请求 `/api/v4/me`。仅校验通过后，Cookie 存入当前插件对象内存；退出登录或离开插件主页后清除。Cookie 不写入配置、内容缓存或 Git。此机制尚需在 PW4 上完成插件部署和交互验收。
+所有探针阶段通过后，脚本把带 Unix 时间戳的白名单 Cookie 原子写入设备 `/tmp/zhihu-cookie-import`，有效期 600 秒，文件权限为 0600。PW4 的 `/tmp` 是临时 RAM 文件系统；KOReader 设置页的“导入电脑临时传入的浏览器会话”会读取并立即删除交接文件，再请求 `/api/v4/me`。默认 Cookie 只存当前插件内存；可选“保持登录”会将白名单 Cookie 存入 `settings/zhihu_session.json`，使用 LuaJIT FFI 设置文件权限 0600。每次从磁盘恢复前校验 `/api/v4/me`；无效会话、手动退出或关闭保持登录时删除文件。文件是明文 bearer 凭证，设置目录备份也会包含它。普通插件升级只替换插件目录，因此不会删除该文件；重置设置目录或手动删除会话文件会清除登录。PW4 上的文件权限与跨重启恢复仍待实机验收。
 
 回答字段检查不能证明知乎已返回任意回答的全部文字或媒体；正文与评论读取必须由用户逐条主动触发。出现 `verification_required` 即停止，不自动解题、不伪装设备或重试。

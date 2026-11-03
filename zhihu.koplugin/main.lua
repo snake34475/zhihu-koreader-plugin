@@ -5,6 +5,7 @@ local API = require("zhihu_api")
 local Cache = require("zhihu_cache")
 local LoggedAPI = require("zhihu_logged_api")
 local LoggedCache = require("zhihu_logged_cache")
+local SessionStore = require("zhihu_session_store")
 local ZhihuUI = require("zhihu_ui")
 local lfs = require("libs/libkoreader-lfs")
 
@@ -31,7 +32,9 @@ function Zhihu:initialize()
     self.cache = Cache.new(cache_directory, function() return self.config:get("access_secret") end)
     self.logged_api = LoggedAPI.new({ timeout_provider = function() return self.config:get("timeout") end })
     self.logged_cache = LoggedCache.new(logged_cache_directory)
-    self.client = ZhihuUI.new(self.config, self.api, self.cache, self.ui, self.logged_api, self.logged_cache)
+    self.session_store = SessionStore.new(DataStorage:getSettingsDir() .. "/zhihu_session.json")
+    self.client = ZhihuUI.new(self.config, self.api, self.cache, self.ui, self.logged_api,
+        self.logged_cache, self.session_store)
     if self.config.load_error then ZhihuUI.message("配置文件损坏，当前使用默认配置；缓存仍可读取。") end
     return true
 end

@@ -6,7 +6,7 @@
 
 `tools/zhihu_feed_probe.py` 只做接口诊断：Cookie 经 SSH stdin 传到 PW4 的 Lua 进程内存，验证 `/api/v4/me`、热榜、推荐和问题回答端点；进程结束后 Cookie 清除。它**不会**创建 `/tmp/zhihu-cookie-import`，所以 `profile_valid=true` 只代表账号校验成功，不代表 KOReader 已导入会话。
 
-需要单独运行 `tools/zhihu_cookie_import.py`。脚本隐藏读取 Cookie，校验 `/api/v4/me` 后才写入 PW4 临时交接文件。随后在 KOReader 知乎插件“设置”中选择“导入电脑临时传入的浏览器会话”。临时文件 10 分钟后过期，插件读取时立即删除；会话最终只保存在 KOReader 进程内存。
+需要单独运行 `tools/zhihu_cookie_import.py`。脚本隐藏读取 Cookie，校验 `/api/v4/me` 后才写入 PW4 临时交接文件。随后在 KOReader 知乎插件“设置”中选择“导入电脑临时传入的浏览器会话”。临时文件 10 分钟后过期，插件读取时立即删除；默认会话只在 KOReader 进程内存。若在插件设置中开启“保持登录”，Cookie 会保存到设置目录的 `zhihu_session.json`，文件权限 0600，并在下次联网时重新校验。Cookie 是明文 bearer 凭证；设置目录备份也可能包含该账号会话。
 
 ## PowerShell 提示 Paramiko 缺失
 
@@ -14,7 +14,7 @@
 
 ## 更新插件文件后界面没有变化
 
-SFTP 部署替换磁盘上的插件目录，不会热重载已运行的 KOReader Lua 模块。重启 KOReader 后新版本才会加载。重启会清除插件内存中的网页登录会话，因此重启后需再次运行 Cookie 导入脚本并从插件设置导入。
+SFTP 部署替换磁盘上的插件目录，不会热重载已运行的 KOReader Lua 模块。重启 KOReader 后新版本才会加载。未开启“保持登录”时，重启会清除内存中的网页登录会话，需再次运行 Cookie 导入脚本并从插件设置导入。已开启时，普通插件更新只替换插件目录，`settings/zhihu_session.json` 会保留；重启后首次联网时会重新校验它。若账号会话已被知乎撤销或过期，需在浏览器重新登录并导入新 Cookie。
 
 ## Access Secret 和网页登录 Cookie 不是一套凭证
 

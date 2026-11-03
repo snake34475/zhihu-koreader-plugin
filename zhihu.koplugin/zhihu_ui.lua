@@ -25,10 +25,10 @@ local function night_mode_enabled()
     return settings ~= nil and settings:isTrue("night_mode") or false
 end
 
-function UI.new(config, api, cache, reader_ui, logged_api, logged_cache)
+function UI.new(config, api, cache, reader_ui, logged_api, logged_cache, session_store)
     return setmetatable({ config = config, api = api, cache = cache, reader_ui = reader_ui,
         public_answer = PublicAnswer.new(), logged_api = logged_api or LoggedAPI.new(),
-        logged_cache = logged_cache, zhihu_session = nil }, UI)
+        logged_cache = logged_cache, session_store = session_store, zhihu_session = nil }, UI)
 end
 
 function UI.message(text)
@@ -38,6 +38,15 @@ end
 local function cache_stamp(epoch)
     local ok, value = pcall(os.date, "%Y-%m-%d %H:%M", epoch or 0)
     return ok and value or "未知时间"
+end
+
+local function cookie_fingerprint(session)
+    local parts = {}
+    for name, value in pairs(session and session.jar or {}) do
+        parts[#parts + 1] = name .. "=" .. tostring(value)
+    end
+    table.sort(parts)
+    return table.concat(parts, ";")
 end
 
 function UI:menu(title, items, options)
@@ -134,8 +143,8 @@ function UI:menu_items()
             { text = "最近直答", callback = function() self:show_cached("answer") end },
         } },
         { text = "设置", callback = function() self:settings() end },
-        { text = "关于 · 0.2.4", callback = function()
-            UI.message("知乎 0.2.4\n热榜、推荐、问题回答、直答与离线阅读。\n回答正文支持左右滑动切换，评论可分页查看。")
+        { text = "关于 · 0.2.5", callback = function()
+            UI.message("知乎 0.2.5\n热榜、推荐、问题回答、直答与离线阅读。\n回答正文支持左右滑动切换，评论可分页查看。")
         end },
     }
 end
@@ -218,6 +227,62 @@ function UI:run_request(label, task, success, failure, require_secret, cancelled
     end)
 end
 
+function UI:run_logged_request(label, task, success, failure, cancelled)
+    local function run_with_session(session)
+        local old_cookies = cookie_fingerprint(session)
+        self:run_request(label, function() return task(session) end, function(result, raw)
+            self.zhihu_session = session
+            if self.config:get("remember_login") and self.session_store
+                and cookie_fingerprint(session) ~= old_cookies then
+                local saved = self.session_store:save(session)
+                if not saved then UI.message("内容已取得，但登录 Cookie 未能持久保存；请检查设置目录权限。") end
+            end
+            success(result, raw)
+        end, function(err)
+            if err.kind == "login_required" then
+                if self.zhihu_session == session then self.zhihu_session = nil end
+                if self.session_store then self.session_store:clear() end
+            end
+            failure(err)
+        end, false, cancelled)
+    end
+
+    if self.zhihu_session then return run_with_session(self.zhihu_session) end
+    if not self.config:get("remember_login") or not self.session_store then
+        failure({ kind = "login_required", message = "尚未登录知乎。请先扫码登录或导入浏览器会话。" })
+        return
+    end
+    local saved_session = self.session_store:load()
+    if not saved_session then
+        failure({ kind = "login_required", message = "没有可恢复的知乎会话，请重新登录或导入浏览器会话。" })
+        return
+    end
+    self:run_request("恢复已保存的知乎登录", function()
+        return self.logged_api:verify_session(saved_session)
+    end, function(verified)
+        self.zhihu_session = verified
+        self:persist_verified_session(verified)
+        run_with_session(verified)
+    end, function(err)
+        if err.kind == "login_required" then
+            self.session_store:clear()
+            self.zhihu_session = nil
+        end
+        failure(err)
+    end, false, cancelled)
+end
+
+function UI:persist_verified_session(session)
+    if not self.config:get("remember_login") then return true end
+    if not self.session_store then return nil end
+    local saved = self.session_store:save(session)
+    if not saved then
+        UI.message("本次登录有效，但 Cookie 未能保存到设备；请检查设置目录权限和空间。")
+        return nil
+    end
+    return true
+end
+
 function UI:request(kind, query)
     if kind == "hot" or kind == "recommend" then return self:request_feed(kind) end
     self:run_request(titles[kind], function()
@@ -237,8 +302,7 @@ function UI:request_feed(kind, cursor, context, index, force)
         context.pages, context.cursors = {}, {}
     end
     if cached then return self:show_feed(kind, cached, nil, context, false) end
-    local session = self.zhihu_session
-    self:run_request(kind == "hot" and "知乎热榜" or "知乎推荐", function()
+    self:run_logged_request(kind == "hot" and "知乎热榜" or "知乎推荐", function(session)
         return self.logged_api:fetch_feed(kind, cursor, session, self.config:get("hot_limit"))
     end, function(result)
         result.kind = kind
@@ -250,7 +314,6 @@ function UI:request_feed(kind, cursor, context, index, force)
         self:show_feed(kind, result, nil, context, false)
         if index == 1 and not saved then UI.message("列表已获取，但离线缓存写入失败。") end
     end, function(err)
-        if err.kind == "login_required" then self.zhihu_session = nil end
         local saved = self.cache:load_feed(kind)
         if index == 1 and saved then
             self:show_feed(kind, saved.result, "缓存于 " .. cache_stamp(saved.saved_at), context, true)
@@ -446,15 +509,13 @@ function UI:question_page(context, cursor, index, force)
         self:show_question(context, page)
     end
     if entry then display(entry) return end
-    local session = self.zhihu_session
-    self:run_request("问题回答列表", function()
+    self:run_logged_request("问题回答列表", function(session)
         return self.logged_api:fetch_question_answers(context.url, cursor or context.cursors[index], session)
     end, function(result)
             local saved = self.cache:save_web_question(context.url, context.question.title, index, result)
             display({ result = result, index = index, fetched_at = os.time() })
             if not saved then UI.message("回答已获取，但离线缓存写入失败。") end
         end, function(err)
-            if err.kind == "login_required" then self.zhihu_session = nil end
             local previous = context.pages[index] or self.cache:load_web_question(context.url, index)
             if previous then display(previous) end
             UI.message(err.message .. (previous and "\n已保留本页缓存。" or "\n返回后可继续阅读已缓存摘要。"))
@@ -640,14 +701,11 @@ function UI:prefetch_next_answer(navigation)
     local index, item = adjacent_answer(navigation, 1)
     local id = item and PublicAnswer.answer_id(item.url)
     if not id or self.logged_cache:load_answer(id) then return end
-    local session = self.zhihu_session
-    self:run_request("缓存下一条回答", function()
+    self:run_logged_request("缓存下一条回答", function(session)
         return self.logged_api:fetch_answer(id, session, item.summary)
     end, function(result)
         if self.logged_cache then self.logged_cache:save_answer(result) end
-    end, function(err)
-        if err.kind == "login_required" and self.zhihu_session == session then self.zhihu_session = nil end
-    end, false)
+    end, function() end)
 end
 
 function UI:fetch_logged_answer(item, navigation, force_refresh)
@@ -655,25 +713,18 @@ function UI:fetch_logged_answer(item, navigation, force_refresh)
     if not id then UI.message("无法从回答链接核对回答 ID。") return end
     local cached = not force_refresh and self.logged_cache and self.logged_cache:load_answer(id)
     if cached then return self:show_logged_body(item, cached, true, navigation) end
-    if not self.zhihu_session then
-        local saved = self.logged_cache and self.logged_cache:load_answer(id)
-        if saved then self:show_logged_body(item, saved, true, navigation)
-        else UI.message("尚未登录知乎。请先在“设置”中扫码登录或导入浏览器会话，再点击获取正文。摘要仍可阅读。") end
-        return
-    end
-    self:run_request("已登录回答正文", function()
-        return self.logged_api:fetch_answer(id, self.zhihu_session, item.summary)
+    self:run_logged_request("已登录回答正文", function(session)
+        return self.logged_api:fetch_answer(id, session, item.summary)
     end, function(result)
         if self.logged_cache then self.logged_cache:save_answer(result) end
         self:show_logged_body(item, result, false, navigation)
     end, function(err)
-        if err.kind == "login_required" then self.zhihu_session = nil end
         local saved = self.logged_cache and self.logged_cache:load_answer(id)
         if saved then
             self:show_logged_body(item, saved, true, navigation)
             UI.message((err.message or "回答获取失败。") .. "\n已打开最近一次通过校验的正文缓存。")
         else UI.message(err.message or "回答获取失败，摘要仍可阅读。") end
-    end, false)
+    end)
 end
 
 function UI:comments_page(item, id, cursor, page, cached, navigation)
@@ -713,25 +764,18 @@ function UI:fetch_comments(item, cursor, navigation, force_refresh)
     cursor = cursor or "0"
     local cached = not force_refresh and self.logged_cache and self.logged_cache:load_comments(id, cursor)
     if cached then return self:comments_page(item, id, cursor, cached, true, navigation) end
-    if not self.zhihu_session then
-        local saved = self.logged_cache and self.logged_cache:load_comments(id, cursor)
-        if saved then self:comments_page(item, id, cursor, saved, true, navigation)
-        else UI.message("尚未登录知乎。请先在“设置”中扫码登录或导入浏览器会话，再查看评论。摘要仍可阅读。") end
-        return
-    end
-    self:run_request("回答评论", function()
-        return self.logged_api:fetch_comments(id, cursor, self.zhihu_session)
+    self:run_logged_request("回答评论", function(session)
+        return self.logged_api:fetch_comments(id, cursor, session)
     end, function(page)
         if self.logged_cache then self.logged_cache:save_comments(id, cursor, page) end
         self:comments_page(item, id, cursor, page, false, navigation)
     end, function(err)
-        if err.kind == "login_required" then self.zhihu_session = nil end
         local saved = self.logged_cache and self.logged_cache:load_comments(id, cursor)
         if saved then
             self:comments_page(item, id, cursor, saved, true, navigation)
             UI.message((err.message or "评论获取失败。") .. "\n已打开最近一次评论缓存。")
         else UI.message((err.message or "评论获取失败。") .. "\n评论读取已停止，摘要仍可阅读。") end
-    end, false)
+    end)
 end
 
 function UI:stop_login_flow(message)
@@ -764,7 +808,11 @@ function UI:poll_login(flow)
             end, function(session)
                 if self.login_flow ~= flow or not flow.active then return end
                 self.zhihu_session = session
-                self:stop_login_flow("知乎账号会话校验通过。会话仅保存在内存中，退出插件或 KOReader 后需重新登录。")
+                local persisted = self:persist_verified_session(session)
+                local message = self.config:get("remember_login") and persisted
+                    and "知乎账号会话校验通过，Cookie 已保存到设备。"
+                    or "知乎账号会话校验通过；当前会话暂存在内存中。"
+                self:stop_login_flow(message)
             end, function(err)
                 if self.login_flow == flow and flow.active then
                     self:stop_login_flow((err.message or "登录态校验失败。") .. "\n扫码确认不代表登录成功；请重新登录或返回摘要阅读。")
@@ -835,8 +883,11 @@ function UI:import_cookie_session(refresh)
         return self.logged_api:verify_session(session)
     end, function(verified)
         self.zhihu_session = verified
+        local persisted = self:persist_verified_session(verified)
         if refresh then UIManager:nextTick(refresh) end
-        UI.message("知乎会话校验通过。Cookie 只保存在当前 KOReader 内存中，退出插件或 KOReader 后会清除。")
+        UI.message(self.config:get("remember_login") and persisted
+            and "知乎会话校验通过，Cookie 已保存到设备。"
+            or "知乎会话校验通过；当前会话暂存在内存中。")
     end, function(err)
         UI.message((err.message or "临时浏览器会话校验失败。") .. "\n会话未导入，摘要仍可阅读。")
     end, false)
@@ -903,14 +954,40 @@ function UI:settings()
     items[#items + 1] = { text = "导入电脑临时传入的浏览器会话", callback = function()
         self:import_cookie_session(refresh)
     end }
-    items[#items + 1] = { text = "知乎扫码登录" .. (self.zhihu_session and ("：已登录 · " .. (self.zhihu_session.user.name or "知乎用户")) or "：未登录"),
+    local remember_login = self.config:get("remember_login")
+    items[#items + 1] = { text = remember_login
+        and "保持登录：开启（Cookie 明文保存在设备）"
+        or "保持登录：关闭（点击开启；Cookie 明文保存在设备）", callback = function()
+        local enabled = not remember_login
+        local ok, err = self.config:set("remember_login", enabled)
+        if not ok then UI.message(err or "无法保存保持登录设置。") return end
+        if enabled then
+            if self.zhihu_session then
+                local saved = self.session_store and self.session_store:save(self.zhihu_session)
+                if not saved then
+                    self.config:set("remember_login", false)
+                    UI.message("Cookie 未能安全保存，保持登录未开启；请检查设备文件权限。")
+                    return
+                end
+            end
+            UI.message("保持登录已开启。Cookie 会以明文保存在 Kindle 的设置目录中；任何能读取该文件的人都可使用此账号会话。")
+        else
+            if self.session_store then self.session_store:clear() end
+            UI.message("保持登录已关闭，设备上的已保存 Cookie 已删除。当前运行中的会话仍可用，直到退出插件或 KOReader。")
+        end
+        UIManager:nextTick(refresh)
+    end }
+    local login_status = self.zhihu_session and ("已登录 · " .. (self.zhihu_session.user.name or "知乎用户"))
+        or (remember_login and self.session_store and self.session_store:has_saved() and "已保存待验证" or "未登录")
+    items[#items + 1] = { text = "知乎扫码登录：" .. login_status,
         callback = function() self:start_login() end }
     if self.zhihu_session then
         items[#items + 1] = { text = "退出知乎登录", callback = function()
             self:stop_login_flow()
             self.zhihu_session = nil
+            if self.session_store then self.session_store:clear() end
             refresh()
-            UI.message("知乎会话已从内存清除。")
+            UI.message("知乎会话已从内存和设备保存文件中清除。")
         end }
     end
     for _, field in ipairs(fields) do
