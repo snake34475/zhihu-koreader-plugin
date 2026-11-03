@@ -728,8 +728,21 @@ end
 function UI:comments_page(item, id, cursor, page, cached, navigation)
     local items = {}
     for index, comment in ipairs(page.items or {}) do
-        items[#items + 1] = { text = string.format("%d. %s\n%s", index,
+        local root_comment = comment
+        items[#items + 1] = { text = string.format("%d. %s\n\n%s", index,
             comment.author ~= "" and comment.author or "匿名用户", comment.content) }
+        local children = type(comment.child_comments) == "table" and comment.child_comments or {}
+        for child_index = 1, math.min(2, #children) do
+            local child = children[child_index]
+            local author = child.author ~= "" and child.author or "匿名用户"
+            if child.reply_to_author ~= "" then author = author .. " 回复 " .. child.reply_to_author end
+            items[#items + 1] = { text = "    " .. author .. "\n\n    " .. child.content }
+        end
+        local count = math.max(tonumber(comment.child_comment_count) or 0, #children)
+        if count > 2 or count > #children then
+            items[#items + 1] = { text = "    查看全部 " .. count .. " 条回复 ›",
+                callback = function() self:fetch_child_comments(item, root_comment, "0", navigation) end }
+        end
     end
     if #items == 0 then items[1] = { text = "本页没有评论。" } end
     local stamp = os.date("%Y-%m-%d %H:%M", page.fetched_at or os.time())
@@ -754,6 +767,56 @@ function UI:comments_page(item, id, cursor, page, cached, navigation)
     menu = self:menu("回答评论", items, { buttons = buttons,
         subtitle = string.format("%s取得于 %s · %s%s", cached and "缓存 · " or "", stamp, page.range or ("本页 " .. #page.items .. " 条"),
             page.is_end and " · 已到末尾" or "") })
+end
+
+function UI:child_comments_page(item, root, cursor, page, cached, navigation)
+    local items = {}
+    for index, comment in ipairs(page.items or {}) do
+        local author = comment.author ~= "" and comment.author or "匿名用户"
+        if comment.reply_to_author ~= "" then author = author .. " 回复 " .. comment.reply_to_author end
+        items[#items + 1] = { text = string.format("%d. %s\n\n%s", index, author, comment.content) }
+    end
+    if #items == 0 then items[1] = { text = "本页没有子评论。" } end
+    local stamp = os.date("%Y-%m-%d %H:%M", page.fetched_at or os.time())
+    local menu
+    menu = self:menu("评论回复", items, { buttons = { {
+        { text = "返回评论", callback = function()
+            if menu then UIManager:close(menu) end
+            self:fetch_comments(item, "0", navigation)
+        end },
+        { text = "刷新本页", callback = function()
+            if menu then UIManager:close(menu) end
+            self:fetch_child_comments(item, root, cursor, navigation, true)
+        end },
+        { text = "下一页", enabled = not page.is_end, callback = function()
+            if page.next_cursor then
+                if menu then UIManager:close(menu) end
+                self:fetch_child_comments(item, root, page.next_cursor, navigation)
+            end
+        end },
+    } }, subtitle = string.format("%s%s · %s%s", root.author or "评论回复",
+        cached and " · 缓存" or "", stamp, page.is_end and " · 已到末尾" or "") })
+end
+
+function UI:fetch_child_comments(item, root, cursor, navigation, force_refresh)
+    if type(root) ~= "table" or not tostring(root.id or ""):match("^%d+$") then
+        UI.message("无法核对这条评论的 ID。") return
+    end
+    cursor = cursor or "0"
+    local cached = not force_refresh and self.logged_cache and self.logged_cache:load_child_comments(root.id, cursor)
+    if cached then return self:child_comments_page(item, root, cursor, cached, true, navigation) end
+    self:run_logged_request("评论回复", function(session)
+        return self.logged_api:fetch_child_comments(root.id, cursor, session)
+    end, function(page)
+        if self.logged_cache then self.logged_cache:save_child_comments(root.id, cursor, page) end
+        self:child_comments_page(item, root, cursor, page, false, navigation)
+    end, function(err)
+        local saved = self.logged_cache and self.logged_cache:load_child_comments(root.id, cursor)
+        if saved then
+            self:child_comments_page(item, root, cursor, saved, true, navigation)
+            UI.message((err.message or "子评论获取失败。") .. "\n已打开最近一次回复缓存。")
+        else UI.message((err.message or "子评论获取失败。") .. "\n评论摘要仍可阅读。") end
+    end)
 end
 
 function UI:fetch_comments(item, cursor, navigation, force_refresh)

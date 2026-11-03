@@ -67,6 +67,38 @@ local function comment_path(answer_id, cursor)
     return nil
 end
 
+local function child_comment_path(comment_id, cursor)
+    local base = "/api/v4/comment_v5/comment/" .. comment_id .. "/child_comment"
+    if cursor == nil or cursor == "0" then return base .. "?order_by=score&limit=" .. Client.PAGE_SIZE .. "&offset=" end
+    if type(cursor) ~= "string" or #cursor > 2048 or cursor:find("[%c%s#]") then return nil end
+    local prefix = BASE .. base .. "?"
+    if cursor:sub(1, #prefix) == prefix then return cursor:sub(#BASE + 1) end
+    if cursor:sub(1, #base + 1) == base .. "?" then return cursor end
+    if cursor:sub(1, 1) == "?" then return base .. cursor end
+    return nil
+end
+
+local function comment_author(value)
+    return Renderer.text(type(value) == "table" and (value.name or value.name_cn) or "")
+end
+
+local function comment_item(item, depth)
+    if type(item) ~= "table" then return nil end
+    local text = Renderer.text(item.content or "")
+    if text == "" then return nil end
+    local count = tonumber(item.child_comment_count) or 0
+    local children = {}
+    if (depth or 0) < 1 then
+        for _, child in ipairs(type(item.child_comments) == "table" and item.child_comments or {}) do
+            local parsed = comment_item(child, (depth or 0) + 1)
+            if parsed then children[#children + 1] = parsed end
+        end
+    end
+    return { id = tostring(item.id or ""), author = comment_author(item.author), content = text,
+        reply_to_author = comment_author(item.reply_to_author), child_comment_count = math.max(0, count),
+        child_comments = children }
+end
+
 local function feed_path(base, cursor)
     if cursor == nil or cursor == "" then return base end
     if type(cursor) ~= "string" or #cursor > 4096 or cursor:find("[%c%s#]") then return nil end
@@ -421,18 +453,41 @@ function Client:fetch_comments(answer_id, cursor, session)
     end
     local comments = {}
     for _, item in ipairs(data) do
-        if type(item) == "table" then
-            local text = Renderer.text(item.content or "")
-            if text ~= "" then
-                comments[#comments + 1] = { id = tostring(item.id or ""), author = Renderer.text(
-                    type(item.author) == "table" and (item.author.name or item.author.name_cn) or ""), content = text }
-            end
-        end
+        local parsed = comment_item(item)
+        if parsed then comments[#comments + 1] = parsed end
     end
     local next_cursor = type(paging.next) == "string" and paging.next or ""
     if not paging.is_end and (next_cursor == "" or next_cursor == cursor
         or not comment_path(answer_id, next_cursor)) then
         return nil, err("invalid_response", status, "评论分页游标无效，已停止翻页。")
+    end
+    return { items = comments, next_cursor = not paging.is_end and next_cursor or nil,
+        is_end = paging.is_end, fetched_at = self.clock(), range = "本页 " .. #comments .. " 条" }
+end
+
+function Client:fetch_child_comments(comment_id, cursor, session)
+    comment_id = tostring(comment_id or "")
+    if not comment_id:match("^%d+$") then return nil, err("invalid_response", nil, "评论 ID 无效。") end
+    cursor = cursor == nil and "0" or tostring(cursor)
+    local path = child_comment_path(comment_id, cursor)
+    if not path then return nil, err("invalid_response", nil, "子评论分页游标无效，已停止翻页。") end
+    local payload, status, kind = self:request("GET", path, session)
+    if not payload then return nil, err(kind, status, kind == "verification_required" and "知乎要求人机验证。"
+        or kind == "login_required" and "知乎登录态已失效，请重新登录。"
+        or kind == "forbidden" and "知乎拒绝访问子评论。"
+        or kind == "rate_limited" and "知乎请求过于频繁，请稍后再试。" or "子评论获取失败。") end
+    local data, paging = payload.data, payload.paging
+    if type(data) ~= "table" or type(paging) ~= "table" or type(paging.is_end) ~= "boolean" then
+        return nil, err("invalid_response", status, "子评论分页响应格式异常。")
+    end
+    local comments = {}
+    for _, item in ipairs(data) do
+        local parsed = comment_item(item)
+        if parsed then comments[#comments + 1] = parsed end
+    end
+    local next_cursor = type(paging.next) == "string" and paging.next or ""
+    if not paging.is_end and (next_cursor == "" or next_cursor == cursor or not child_comment_path(comment_id, next_cursor)) then
+        return nil, err("invalid_response", status, "子评论分页游标无效，已停止翻页。")
     end
     return { items = comments, next_cursor = not paging.is_end and next_cursor or nil,
         is_end = paging.is_end, fetched_at = self.clock(), range = "本页 " .. #comments .. " 条" }

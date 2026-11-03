@@ -69,4 +69,32 @@ function Cache:load_comments(id, cursor)
     return entry
 end
 
+function Cache:save_child_comments(id, cursor, page)
+    id = answer_id(id)
+    local key
+    key, cursor = cursor_key(cursor)
+    if not id or #cursor > 2048 or type(page) ~= "table"
+        or type(page.items) ~= "table" or type(page.is_end) ~= "boolean"
+        or type(page.fetched_at) ~= "number" then return nil, "format" end
+    return Storage.write(self.directory .. "/child-comments-" .. id .. "-" .. key .. ".json", {
+        version = 1, kind = "child_comments", comment_id = id, cursor = cursor,
+        items = page.items, next_cursor = page.next_cursor, is_end = page.is_end,
+        fetched_at = page.fetched_at, range = page.range,
+    })
+end
+
+function Cache:load_child_comments(id, cursor)
+    id = answer_id(id)
+    local key
+    key, cursor = cursor_key(cursor)
+    if not id or #cursor > 2048 then return nil, "format" end
+    local entry, err = Storage.read(self.directory .. "/child-comments-" .. id .. "-" .. key .. ".json")
+    if not entry then return nil, err end
+    if entry.version ~= 1 or entry.kind ~= "child_comments" or entry.comment_id ~= id
+        or entry.cursor ~= cursor or type(entry.items) ~= "table"
+        or type(entry.is_end) ~= "boolean" or type(entry.fetched_at) ~= "number"
+        or (entry.range ~= nil and type(entry.range) ~= "string") then return nil, "format" end
+    return entry
+end
+
 return Cache

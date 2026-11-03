@@ -34,10 +34,17 @@ test("answer validates id, empty body, truncation, and paywall", function()
 end)
 
 test("comment pages use opaque server cursor and stop at end", function()
-    current = { data = { { id = 1, content = "<p>评论一</p>", author = { name = "甲" } } },
+    current = { data = { { id = 1, content = "<p>评论一</p>", author = { name = "甲" },
+            child_comment_count = 3, child_comments = {
+                { id = 11, content = "<p>回复一</p>", author = { name = "乙" }, reply_to_author = { name = "甲" } },
+                { id = 12, content = "回复二", author = { name = "丙" } },
+            } } },
         paging = { is_end = false, next = "https://www.zhihu.com/api/v4/comment_v5/answers/301/root_comment?offset=next-token&limit=10" } }
     local first = assert(api:fetch_comments("301", "0", session))
     eq(first.items[1].content, "评论一")
+    eq(first.items[1].child_comment_count, 3)
+    eq(first.items[1].child_comments[1].author, "乙")
+    eq(first.items[1].child_comments[1].reply_to_author, "甲")
     eq(first.next_cursor, "https://www.zhihu.com/api/v4/comment_v5/answers/301/root_comment?offset=next-token&limit=10")
     eq(first.is_end, false)
     assert(requests[#requests].url:find("offset=", 1, true))
@@ -47,6 +54,21 @@ test("comment pages use opaque server cursor and stop at end", function()
     assert(requests[#requests].url:find("offset=next-token&limit=10", 1, true))
     local _, bad_cursor = api:fetch_comments("301", "https://example.com/comments", session)
     eq(bad_cursor.kind, "invalid_response")
+end)
+
+test("child comment pages use a comment-scoped opaque cursor", function()
+    current = { data = { { id = 11, content = "<p>子评论</p>", author = { name = "乙" },
+            reply_to_author = { name = "甲" } } },
+        paging = { is_end = false, next = "https://www.zhihu.com/api/v4/comment_v5/comment/1/child_comment?offset=next-child&limit=10" } }
+    local first = assert(api:fetch_child_comments("1", "0", session))
+    eq(first.items[1].content, "子评论")
+    eq(first.items[1].reply_to_author, "甲")
+    assert(requests[#requests].url:find("/comment/1/child_comment", 1, true))
+    local next_page = assert(api:fetch_child_comments("1", first.next_cursor, session))
+    assert(requests[#requests].url:find("offset=next-child", 1, true))
+    eq(next_page.is_end, false)
+    local _, invalid = api:fetch_child_comments("1", "https://example.com/child", session)
+    eq(invalid.kind, "invalid_response")
 end)
 
 test("login separates QR scan from account session verification", function()
