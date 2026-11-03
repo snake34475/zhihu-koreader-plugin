@@ -8,9 +8,9 @@
 
 需要单独运行 `tools/zhihu_cookie_import.py`。脚本隐藏读取 Cookie，校验 `/api/v4/me` 后才写入 PW4 临时交接文件。随后在 KOReader 知乎插件“设置”中选择“导入电脑临时传入的浏览器会话”。临时文件 10 分钟后过期，插件读取时立即删除；默认会话只在 KOReader 进程内存。若在插件设置中开启“保持登录”，Cookie 会保存到设置目录的 `zhihu_session.json`，文件权限 0600，并在下次联网时重新校验。Cookie 是明文 bearer 凭证；设置目录备份也可能包含该账号会话。
 
-## PowerShell 提示 Paramiko 缺失
+## Cookie 导入脚本要求
 
-项目的系统 Python 可能没有 Paramiko。工具会转到 `pw4-android` 虚拟环境重新运行，因此隐藏 Cookie 提示会在“retrying with pw4-android virtualenv”之后出现。应在该提示出现后粘贴完整的单行 Cookie。若错误发生在 SSH 连接之前，Cookie 尚未发送到 Kindle。
+`tools/zhihu_cookie_import.py` 使用系统自带 OpenSSH 和 Python 标准库，不再依赖 `pw4-android` 项目或 Paramiko。默认连接 `root@192.168.31.104:2222`，可通过 `ZHIHU_DEVICE_HOST` / `ZHIHU_DEVICE_PORT` 覆盖。运行 `python3 tools/zhihu_cookie_import.py` 后，完整 Cookie 只在隐藏提示中输入；发送前会筛选白名单并检查 `z_c0`。远端 `/api/v4/me` 校验通过后，脚本才在设备 `/tmp` 创建 600 秒交接文件。
 
 ## 更新插件文件后界面没有变化
 

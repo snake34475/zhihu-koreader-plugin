@@ -1,19 +1,21 @@
 """Verify and hand off the user's own Zhihu browser session to a PW4.
 
-The Cookie is entered with hidden input, sent over SSH stdin, and only a
-whitelisted subset is staged in the PW4 RAM-backed /tmp for ten minutes.
+Cookie input is hidden, sent only through SSH stdin, and staged on the Kindle's
+RAM-backed /tmp for ten minutes. No Cookie is written to this computer.
 """
 from __future__ import annotations
 
+import base64
 import getpass
+import os
 import subprocess
 import sys
+import tempfile
 import time
-from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-PW4_TOOLS = ROOT.parent / "pw4-android" / "tools"
+DEVICE_HOST = os.environ.get("ZHIHU_DEVICE_HOST", "192.168.31.104")
+DEVICE_PORT = os.environ.get("ZHIHU_DEVICE_PORT", "2222")
 REMOTE_LUA = "/tmp/zhihu-cookie-import-verify.lua"
 REMOTE_IMPORT = "/tmp/zhihu-cookie-import"
 IMPORT_TTL_SECONDS = 600
@@ -45,7 +47,6 @@ local ok, success, status, response_headers = pcall(http.request, {
     headers = headers, sink = ltn12.sink.table(chunks),
 })
 headers.Cookie = nil
-cookie = nil
 local body = table.concat(chunks)
 local location = response_headers and (response_headers.location or response_headers.Location) or ""
 local challenged = tostring(location):find("/account/unhuman", 1, true) ~= nil
@@ -55,24 +56,55 @@ local challenged = tostring(location):find("/account/unhuman", 1, true) ~= nil
     or body:find("40362", 1, true) ~= nil
 if challenged then
     print("PROBE_SESSION_VERIFY status=" .. tostring(status or "unknown") .. " result=verification_required")
-    body = nil
     return
 end
 if not ok or not success then
     print("PROBE_SESSION_VERIFY status=network_error")
-    body = nil
     return
 end
 if tonumber(status) ~= 200 then
     print("PROBE_SESSION_VERIFY status=" .. tostring(status) .. " result=login_required_or_denied")
-    body = nil
     return
 end
 local decoded, profile = pcall(json.decode, body)
 local valid = decoded and type(profile) == "table"
     and (profile.id ~= nil or profile.url_token ~= nil or profile.name ~= nil or profile.name_cn ~= nil)
-print("PROBE_SESSION_VERIFY status=200 profile_valid=" .. tostring(valid == true))
-body, profile = nil, nil
+if not valid then
+    print("PROBE_SESSION_VERIFY status=200 profile_valid=false")
+    return
+end
+
+local import_path = "/tmp/zhihu-cookie-import"
+local temporary_path = import_path .. ".tmp"
+os.remove(temporary_path)
+local file = io.open(temporary_path, "wb")
+if not file then
+    print("PROBE_SESSION handoff=failed")
+    return
+end
+local written = file:write(tostring(os.time()), "\n", cookie, "\n")
+local closed = file:close()
+local chmod_ok = false
+local ffi_ok, ffi = pcall(require, "ffi")
+if ffi_ok then
+    pcall(ffi.cdef, "int chmod(const char *pathname, unsigned int mode);")
+    local called, result = pcall(function() return ffi.C.chmod(temporary_path, 384) end)
+    chmod_ok = called and result == 0
+end
+if not written or not closed or not chmod_ok then
+    os.remove(temporary_path)
+    print("PROBE_SESSION handoff=failed")
+    return
+end
+os.remove(import_path)
+if not os.rename(temporary_path, import_path) then
+    os.remove(temporary_path)
+    print("PROBE_SESSION handoff=failed")
+    return
+end
+print("PROBE_SESSION_VERIFY status=200 profile_valid=true")
+print("PROBE_SESSION handoff=ready expires_seconds=600")
+cookie, body, profile = nil, nil, nil
 '''
 
 
@@ -80,7 +112,7 @@ def normalize_cookie(header: str) -> str:
     if header[:7].lower() == "cookie:":
         header = header[7:].strip()
     if not header or len(header) > 16384 or any(ord(ch) < 32 or ord(ch) == 127 for ch in header):
-        raise ValueError("empty, oversized, or multiline Cookie")
+        raise ValueError("Cookie 为空、过长或包含换行")
     jar: dict[str, str] = {}
     for pair in header.split(";"):
         if "=" not in pair:
@@ -90,123 +122,77 @@ def normalize_cookie(header: str) -> str:
         if name in COOKIE_NAMES and value and len(value) <= 4096:
             jar[name] = value
     if "z_c0" not in jar:
-        raise ValueError("Cookie has no z_c0 session value")
+        raise ValueError("Cookie 中没有 z_c0 登录凭据")
     return "; ".join(f"{name}={jar[name]}" for name in sorted(jar))
 
 
-def ensure_paramiko() -> int | None:
-    try:
-        import paramiko  # noqa: F401
-        return None
-    except Exception:
-        pass
-    candidates = [
-        ROOT.parent / "pw4-android" / ".venv" / "Scripts" / "python.exe",
-        ROOT.parent / "pw4-android" / ".venv" / "bin" / "python",
-    ]
-    for python in candidates:
-        if python.is_file() and python.resolve() != Path(sys.executable).resolve():
-            print("SSH dependency missing in this Python; retrying with pw4-android virtualenv.")
-            result = subprocess.run([str(python), str(Path(__file__).resolve())], check=False)
-            return result.returncode
-    print("ERROR: paramiko is not installed for this Python; no Cookie was requested or sent.", file=sys.stderr)
-    print("Run with pw4-android/.venv/Scripts/python.exe, or install it using: py -m pip install paramiko",
-          file=sys.stderr)
-    return 2
+def make_empty_password_askpass() -> str:
+    descriptor, path = tempfile.mkstemp(prefix="zhihu-ssh-askpass-")
+    with os.fdopen(descriptor, "w", encoding="utf-8") as script:
+        script.write("#!/bin/sh\nexit 0\n")
+    os.chmod(path, 0o700)
+    return path
 
 
 def main() -> int:
-    if not PW4_TOOLS.is_dir():
-        print("ERROR: PW4 research tools folder not found", file=sys.stderr)
-        return 2
-    sys.path.insert(0, str(PW4_TOOLS))
     try:
-        from lab import connect  # type: ignore
-    except Exception as exc:
-        print("ERROR: Paramiko/PW4 tools unavailable (" + type(exc).__name__ + ")", file=sys.stderr)
+        port = int(DEVICE_PORT)
+        if not 1 <= port <= 65535:
+            raise ValueError
+    except ValueError:
+        print("ERROR: ZHIHU_DEVICE_PORT must be between 1 and 65535", file=sys.stderr)
         return 2
 
-    dependency_result = ensure_paramiko()
-    if dependency_result is not None:
-        return dependency_result
-
-    cookie = getpass.getpass("Paste your browser Cookie header value (input hidden; do not paste it into chat): ").strip()
+    cookie = getpass.getpass("Paste browser Cookie header value (input hidden; do not paste it into chat): ").strip()
     try:
         cookie = normalize_cookie(cookie)
     except ValueError as exc:
-        print("ERROR: " + str(exc) + "; nothing was sent to the device")
+        print("ERROR: " + str(exc) + "; nothing was sent to the Kindle")
         return 2
 
-    client = sftp = channel = None
+    encoded_lua = base64.b64encode(LUA.encode("utf-8")).decode("ascii")
+    remote_command = (
+        "umask 077; printf '%s' '" + encoded_lua + "' | base64 -d > " + REMOTE_LUA
+        + " && cd /mnt/us/koreader && ./luajit " + REMOTE_LUA
+    )
+    askpass = make_empty_password_askpass()
+    env = os.environ.copy()
+    env.update({"SSH_ASKPASS": askpass, "SSH_ASKPASS_REQUIRE": "force", "DISPLAY": ":0"})
+    command = [
+        "ssh", "-p", str(port), "-o", "PubkeyAuthentication=no",
+        "-o", "PreferredAuthentications=password", "-o", "NumberOfPasswordPrompts=1",
+        "-o", "ConnectTimeout=8", f"root@{DEVICE_HOST}", remote_command,
+    ]
     try:
-        client = connect()
-        sftp = client.open_sftp()
-        with sftp.file(REMOTE_LUA, "w") as remote_file:
-            remote_file.write(LUA)
-        channel = client.get_transport().open_session(timeout=8)
-        channel.settimeout(8)
-        channel.exec_command("cd /mnt/us/koreader && ./luajit " + REMOTE_LUA)
-        channel.sendall(cookie.encode("utf-8") + b"\n")
-        channel.shutdown_write()
-
-        stdout = bytearray()
-        deadline = time.monotonic() + 35
-        while time.monotonic() < deadline:
-            if channel.recv_ready():
-                stdout.extend(channel.recv(4096))
-            if channel.exit_status_ready() and not channel.recv_ready():
-                break
-            time.sleep(0.05)
-        if not channel.exit_status_ready():
-            print("ERROR: session check timed out; no response body was collected")
-            return 1
-        lines = [line for line in stdout.decode("utf-8", "replace").splitlines()
-                 if line.startswith("PROBE_SESSION_VERIFY ")]
-        for line in lines:
-            print(line)
-        if channel.recv_exit_status() != 0:
-            print("ERROR: device session check exited abnormally")
-            return 1
-        if lines != ["PROBE_SESSION_VERIFY status=200 profile_valid=true"]:
-            return 0
-
-        try:
-            try:
-                sftp.remove(REMOTE_IMPORT + ".tmp")
-            except OSError:
-                pass
-            with sftp.file(REMOTE_IMPORT + ".tmp", "w") as import_file:
-                import_file.write(str(int(time.time())) + "\n" + cookie + "\n")
-            sftp.chmod(REMOTE_IMPORT + ".tmp", 0o600)
-            try:
-                sftp.remove(REMOTE_IMPORT)
-            except OSError:
-                pass
-            sftp.rename(REMOTE_IMPORT + ".tmp", REMOTE_IMPORT)
-            print("PROBE_SESSION handoff=ready expires_seconds=" + str(IMPORT_TTL_SECONDS))
-        except Exception as exc:
-            print("PROBE_SESSION handoff=failed error=" + type(exc).__name__)
-            return 1
-        return 0
-    except Exception as exc:
-        print("ERROR: session import probe failed (" + type(exc).__name__ + ")")
+        result = subprocess.run(command, input=(cookie + "\n").encode("utf-8"),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                timeout=45, env=env, check=False)
+    except subprocess.TimeoutExpired:
+        print("ERROR: timed out while checking the Kindle session; no response body was collected")
+        return 1
+    except OSError as exc:
+        print("ERROR: could not start OpenSSH (" + type(exc).__name__ + ")")
         return 1
     finally:
+        try:
+            os.unlink(askpass)
+        except OSError:
+            pass
         cookie = "\0" * len(cookie)
-        if channel is not None:
-            channel.close()
-        if sftp is not None:
-            try:
-                sftp.remove(REMOTE_LUA)
-            except Exception:
-                pass
-            try:
-                sftp.remove(REMOTE_IMPORT + ".tmp")
-            except Exception:
-                pass
-            sftp.close()
-        if client is not None:
-            client.close()
+
+    stdout = result.stdout.decode("utf-8", "replace")
+    lines = [line for line in stdout.splitlines()
+             if line.startswith("PROBE_SESSION_VERIFY ") or line.startswith("PROBE_SESSION ")]
+    for line in lines:
+        print(line)
+    if result.returncode != 0:
+        print("ERROR: SSH failed; check that the Kindle is reachable and its host key is trusted")
+        return 1
+    if lines != ["PROBE_SESSION_VERIFY status=200 profile_valid=true",
+                 "PROBE_SESSION handoff=ready expires_seconds=600"]:
+        return 1
+    print("Next: KOReader → 知乎 → 设置 → 导入电脑临时传入的浏览器会话")
+    return 0
 
 
 if __name__ == "__main__":
