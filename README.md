@@ -2,6 +2,8 @@
 
 面向 Kindle + KOReader 的知乎只读客户端原型。已加入扫码会话校验及按需正文/评论读取代码；离线模拟通过，仍需在 PW4 逐关验收，不能据此承诺设备端登录或全文可用。
 
+KUAL 独立版的设计交付（24 屏灰阶设计稿、可点击 HTML 原型、规格 token）见 **[kual/README.md](kual/README.md)**。原型是 `kual/prototype/index.html`，单文件、无依赖，浏览器直接打开即可点。
+
 2026-11-03 已补充多平台阅读需求及 KUAL、EPUB、PW4 系统路线调研，见 [MULTIPLATFORM_RESEARCH.md](MULTIPLATFORM_RESEARCH.md) 和 [TODO.md](TODO.md)。目前尚未接入小黑盒、掘金、酷安、贴吧、微博或小红书。
 
 关于 KUAL/KOReader 插件的工作原理、Lua 与 shell、EPUB 限制、PW4 Android 与墨卓线索，以及 Aristotle 的解释，见 [KINDLE_PLATFORM_EXPLAINED.md](KINDLE_PLATFORM_EXPLAINED.md)。

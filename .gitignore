@@ -38,3 +38,7 @@ work/
 *.png
 *.jpg
 *.jpeg
+
+# 本地工具状态，不入库
+.workbuddy/
+.DS_Store

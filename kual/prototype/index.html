@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<!--
+  知乎 Kindle 阅读器 · PW4 可点击原型
+  ================================================================
+  用途：评审用。所有文本为虚构示例，不含真实会话、密钥或个人数据。
+  运行：直接用浏览器打开本文件即可，无外部依赖、无网络请求。
+
+  规格（可直接转写为原生程序，单位 px，画布 1072 × 1448）
+  ----------------------------------------------------------------
+  版面     页边距 64 ｜ 正文行长 944（约 26 字）｜ 卡片内边距 40 / 64
+  结构     标题栏 140 ｜ 频道栏 128 ｜ 缓存条 96 ｜ 底部操作栏 132 ｜ 阅读设置面板 ≈ 950
+  触控     最小 88 × 88 ｜ 主按钮 112 高 ｜ 次按钮 80 高 ｜ 列表整行可点（≥ 200）
+  字阶     H1 48/64 Bold ｜ H2 44/62 SemiBold ｜ H3 40/56 SemiBold
+           正文 38/68 ｜ 摘要 32/52 ｜ 评论 34/58 ｜ 元信息 24–26/40
+  灰阶     #000000 主文字 ｜ #3C3C3C 摘要 ｜ #6E6E6E 元信息 ｜ #9A9A9A 占位
+           #C8C8C8 细线 ｜ #EFEFEF 浅底 ｜ #FFFFFF 纸白
+  暗黑     底 #000000 ｜ 正文 #EDEDED ｜ 元信息 #9E9E9E ｜ 细线 #3A3A3A ｜ 浅底 #141414
+           暗黑下主按钮与选中项改为描边，不出现大面积反白
+  圆角     仅 0 / 8 / 10 / 12；无投影、无渐变、无动画装饰
+  字体     Noto Sans SC（数字与编号用 Inter）
+
+  两个「刷新」严格分开：
+    · 刷新内容 / 刷新正文  → 发网络请求，失败保留缓存与位置
+    · 清除残影 · 全屏刷新   → 只重绘屏幕，不联网、不改缓存与阅读位置
+  ================================================================
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知乎阅读 · Kindle PW4 灰阶原型</title>
+<style>
+/* ============================================================
+   Kindle Paperwhite 4 灰阶阅读器 · 可点击原型
+   画布 1072 × 1448 ｜ 7 档灰阶 ｜ 无投影 / 无渐变 / 无动画装饰
+   ============================================================ */
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:#D8D8D8;
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  color:#1A1A1A;overflow:hidden;
+}
+
+/* ---------- Mac 侧评审台（不属于设计稿本身） ---------- */
+#panel{
+  position:fixed;left:28px;top:28px;width:300px;z-index:50;
+  background:#F7F7F7;border:1px solid #B9B9B9;padding:22px;
+  font-size:13px;line-height:1.6;color:#2B2B2B;
+}
+#panel h1{font-size:15px;font-weight:700;letter-spacing:.02em;margin-bottom:4px}
+#panel .sub{color:#6E6E6E;font-size:12px;margin-bottom:16px}
+#panel .grp{border-top:1px solid #CFCFCF;padding-top:12px;margin-top:12px}
+#panel .grp-t{font-size:11px;color:#7A7A7A;letter-spacing:.08em;margin-bottom:8px}
+.sw{display:flex;align-items:center;justify-content:space-between;padding:7px 0;cursor:pointer;user-select:none}
+.sw .track{width:46px;height:24px;border:1px solid #8A8A8A;background:#fff;position:relative;flex:none}
+.sw .track i{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#8A8A8A;transition:none}
+.sw.on .track{background:#1A1A1A;border-color:#1A1A1A}
+.sw.on .track i{left:25px;background:#fff}
+#panel .nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+#panel .nav button{
+  font:inherit;font-size:12px;padding:6px 9px;border:1px solid #B9B9B9;background:#fff;
+  cursor:pointer;color:#2B2B2B;
+}
+#panel .nav button:hover{background:#EDEDED}
+#panel .tip{color:#7A7A7A;font-size:11px;line-height:1.7;margin-top:14px;border-top:1px solid #CFCFCF;padding-top:12px}
+
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding-left:300px}
+#deviceWrap{position:relative;flex:none}
+#device{
+  width:1072px;height:1448px;background:#fff;position:relative;overflow:hidden;
+  transform-origin:top left;
+  box-shadow:0 0 0 1px #9A9A9A, 0 18px 60px rgba(0,0,0,.22);
+}
+
+/* ---------- 灰阶 token（挂在设备层，弹层与 toast 同样继承） ---------- */
+#device{
+  --ink:#000000;          /* 主文字 / 标题 / 选中 */
+  --ink-2:#3C3C3C;        /* 摘要 / 正文次级 */
+  --ink-3:#6E6E6E;        /* 元信息 / 未选中 */
+  --ink-4:#9A9A9A;        /* 占位 / 禁用 */
+  --line:#C8C8C8;         /* 细线 */
+  --line-strong:#000000;  /* 主分隔线（底栏上边线） */
+  --paper:#FFFFFF;
+  --paper-2:#EFEFEF;      /* 浅底块 */
+  --fs:1;
+  --lh:1.79;
+  background:var(--paper);color:var(--ink);
+}
+#device[data-theme="dark"]{
+  --ink:#EDEDED;--ink-2:#C9C9C9;--ink-3:#9E9E9E;--ink-4:#6E6E6E;
+  --line:#3A3A3A;--line-strong:#8A8A8A;--paper:#000000;--paper-2:#141414;
+}
+#app{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  background:var(--paper);color:var(--ink);
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif;
+  overflow:hidden;
+}
+
+/* 图标默认尺寸，避免未单独声明的 svg 撑满容器 */
+#app svg,#layers svg{width:38px;height:38px;flex:none;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- 字阶 ---------- */
+.t-h1{font-size:48px;line-height:64px;font-weight:700}
+.t-h2{font-size:44px;line-height:62px;font-weight:600}
+.t-h3{font-size:40px;line-height:56px;font-weight:600}
+.t-body{font-size:38px;line-height:68px;font-weight:400}
+.t-ex{font-size:32px;line-height:52px;font-weight:400}
+.t-meta{font-size:26px;line-height:40px;font-weight:400}
+.t-label{font-size:24px;line-height:40px;font-weight:600}
+.num{font-family:"Inter","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums}
+
+/* ---------- 通用骨架 ---------- */
+.page{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--paper)}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{width:0}
+
+/* 标题栏 140 */
+.titlebar{height:140px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 64px;border-bottom:1px solid var(--line)}
+.brand{font-size:40px;font-weight:700;letter-spacing:.01em;display:flex;align-items:baseline;gap:14px}
+.brand .ver{font-size:24px;font-weight:400;color:var(--ink-3);letter-spacing:0}
+.titlebar .right{display:flex;align-items:center;gap:8px}
+.iconbtn{
+  width:88px;height:88px;display:flex;align-items:center;justify-content:center;
+  background:none;border:0;color:var(--ink);cursor:pointer;flex:none;
+}
+.iconbtn:active{background:var(--paper-2)}
+.iconbtn svg{width:44px;height:44px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.offbadge{font-size:24px;color:var(--ink-3);border:1px solid var(--line);padding:6px 14px;letter-spacing:.04em}
+.acctstate{font-size:24px;color:var(--ink-4);letter-spacing:.04em;padding-right:4px}
+
+/* 频道栏 128 —— 选中态只用字重 + 灰度 */
+.channels{height:128px;flex:none;display:flex;align-items:center;padding:0 64px;gap:56px;border-bottom:1px solid var(--line)}
+.ch{font-size:36px;line-height:48px;font-weight:500;color:var(--ink-3);background:none;border:0;padding:0;cursor:pointer;position:relative;height:128px;display:flex;align-items:center}
+.ch.on{color:var(--ink);font-weight:700}
+.ch .dot{display:none}
+
+/* 缓存 / 刷新条 96 */
+.cachebar{height:96px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 64px;border-bottom:1px solid var(--line);gap:24px}
+.cachebar .meta{font-size:26px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ghostbtn{
+  font:inherit;font-size:26px;font-weight:600;color:var(--ink);background:var(--paper);
+  border:1px solid var(--ink);padding:0 28px;height:80px;display:inline-flex;align-items:center;gap:10px;
+  cursor:pointer;white-space:nowrap;flex:none;
+}
+.ghostbtn svg{width:30px;height:30px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ghostbtn:active{background:var(--paper-2)}
+.ghostbtn[disabled]{color:var(--ink-4);border-color:var(--line);cursor:default}
+
+/* 推荐频道：批量翻页 */
+.pager{height:104px;flex:none;display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.pager button{flex:1;background:none;border:0;border-right:1px solid var(--line);font:inherit;font-size:26px;font-weight:600;color:var(--ink);cursor:pointer}
+.pager button:last-child{border-right:0}
+.pager button:disabled{color:var(--ink-4);cursor:default}
+.pager .mid{flex:1.3;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--ink-3);border-right:1px solid var(--line);letter-spacing:.04em}
+
+/* 提示条 */
+.banner{flex:none;padding:26px 64px;border-bottom:1px solid var(--line);background:var(--paper-2);font-size:28px;line-height:44px;color:var(--ink-2);display:flex;gap:18px;align-items:flex-start}
+.banner b{font-weight:700;color:var(--ink);white-space:nowrap}
+.banner .x{margin-left:auto;background:none;border:0;color:var(--ink-3);font-size:30px;cursor:pointer;padding:0 4px;line-height:1;flex:none}
+
+/* ---------- 列表行 ---------- */
+.row{display:flex;gap:32px;padding:44px 64px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+.row:active{background:var(--paper-2)}
+.row-rank{width:64px;flex:none;font-size:40px;line-height:56px;font-weight:700;color:var(--ink-4);padding-top:4px}
+.row-rank.top{color:var(--ink)}
+.row-main{flex:1;min-width:0}
+.kicker{font-size:24px;line-height:40px;color:var(--ink-3);display:flex;gap:16px;align-items:center;margin-bottom:8px}
+.kicker .sep{width:1px;height:22px;background:var(--line)}
+.row-title{font-size:40px;line-height:56px;font-weight:600;color:var(--ink);margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row-ex{font-size:32px;line-height:52px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row-meta{font-size:24px;line-height:40px;color:var(--ink-3);margin-top:16px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+
+/* 状态标签 48 高 */
+.tag{display:inline-flex;align-items:center;height:48px;padding:0 16px;border:1px solid var(--line);font-size:24px;line-height:1;font-weight:600;color:var(--ink-3);white-space:nowrap;letter-spacing:.02em}
+.tag.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tag.warn{border-color:var(--ink-3);color:var(--ink-2)}
+
+/* ---------- 问题页 ---------- */
+.qhead{flex:none;padding:36px 64px 32px;border-bottom:1px solid var(--line-strong)}
+.qhead h1{font-size:44px;line-height:62px;font-weight:700;margin-bottom:16px}
+.qhead .qex{font-size:30px;line-height:48px;color:var(--ink-2);margin-bottom:18px}
+.qhead .qmeta{font-size:24px;line-height:40px;color:var(--ink-3);display:flex;gap:18px;align-items:center}
+.ansrow{display:flex;gap:0;flex-direction:column;padding:40px 64px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+.ansrow:active{background:var(--paper-2)}
+.ansrow .who{display:flex;align-items:baseline;gap:16px;margin-bottom:10px}
+.ansrow .who b{font-size:32px;line-height:48px;font-weight:600}
+.ansrow .who span{font-size:24px;color:var(--ink-3);line-height:40px}
+.ansrow .ex{font-size:32px;line-height:52px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ansrow .foot{display:flex;align-items:center;gap:16px;margin-top:18px;flex-wrap:wrap}
+.ansrow .foot .n{font-size:24px;color:var(--ink-3);line-height:40px}
+
+/* 加载更多 */
+.morebar{padding:40px 64px 64px}
+.morebtn{
+  width:100%;height:112px;background:var(--paper);border:1px solid var(--ink);color:var(--ink);
+  font:inherit;font-size:30px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:14px;
+}
+.morebtn:active{background:var(--paper-2)}
+.batchend{text-align:center;color:var(--ink-4);font-size:24px;line-height:40px;padding:8px 0 0}
+
+/* ---------- 阅读页 ---------- */
+.readbar{height:140px;flex:none;display:flex;align-items:center;padding:0 24px 0 16px;border-bottom:1px solid var(--line);gap:4px}
+.readbar .ttl{flex:1;font-size:30px;font-weight:600;color:var(--ink-3);padding-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aa{width:96px;height:88px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);font:inherit;font-size:32px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;letter-spacing:.02em;margin-right:8px}
+.aa:active{background:var(--paper-2)}
+
+.article{padding:24px 64px 96px}
+.article .src{font-size:24px;line-height:40px;color:var(--ink-3);display:flex;gap:14px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.article h1{font-size:48px;line-height:66px;font-weight:700;letter-spacing:-.005em;margin-bottom:28px}
+.byline{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:26px;border-bottom:1px solid var(--line);margin-bottom:36px}
+.byline .who b{font-size:32px;font-weight:600;display:block;line-height:48px}
+.byline .who span{font-size:24px;color:var(--ink-3);line-height:40px;display:block}
+.article p{font-size:calc(38px * var(--fs));line-height:var(--lh);color:var(--ink);margin-bottom:calc(30px * var(--fs));text-align:justify}
+.article .statehint{
+  border:1px solid var(--line);padding:24px 28px;margin-bottom:34px;font-size:26px;line-height:42px;color:var(--ink-2);
+  display:flex;gap:16px;align-items:flex-start;
+}
+.article .statehint b{color:var(--ink);font-weight:700;white-space:nowrap}
+.article .end{text-align:center;color:var(--ink-4);font-size:24px;line-height:40px;margin-top:26px;letter-spacing:.14em}
+
+/* 底部操作栏 132 */
+.actionbar{height:132px;flex:none;display:flex;border-top:1px solid var(--line-strong);background:var(--paper)}
+.ab{
+  flex:1;background:none;border:0;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  color:var(--ink);font:inherit;font-size:23px;font-weight:600;cursor:pointer;padding:0 6px;
+}
+.ab:last-child{border-right:0}
+.ab svg{width:38px;height:38px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ab .k{line-height:1;white-space:nowrap}
+.ab:active{background:var(--paper-2)}
+.ab[disabled]{color:var(--ink-4);cursor:default}
+.ab.primary{color:var(--ink)}
+
+/* ---------- 评论 ---------- */
+.chead{height:120px;flex:none;display:flex;align-items:center;gap:8px;padding:0 20px;border-bottom:1px solid var(--line)}
+.chead .ttl{flex:1;font-size:32px;font-weight:600}
+.chead .ttl em{font-style:normal;color:var(--ink-3);font-weight:400;font-size:26px;margin-left:12px}
+.cmt{padding:40px 64px;border-bottom:1px solid var(--line)}
+.cmt .who{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.cmt .who b{font-size:32px;line-height:48px;font-weight:600}
+.cmt .who span{font-size:24px;color:var(--ink-3);line-height:40px}
+.cmt .txt{font-size:34px;line-height:58px;color:var(--ink);margin-bottom:18px}
+.cmt .bar{display:flex;align-items:center;gap:32px;font-size:24px;color:var(--ink-3);line-height:40px}
+.cmt .bar button{background:none;border:0;font:inherit;color:var(--ink-3);cursor:pointer;padding:12px 0;font-size:24px}
+.cmt .bar button:active{color:var(--ink)}
+.kids{margin-top:22px;padding-left:44px;border-left:1px solid var(--line)}
+.kid{padding:20px 0 22px;border-bottom:1px solid var(--line);cursor:pointer}
+.kid:last-of-type{border-bottom:0}
+.kid p{font-size:30px;line-height:52px;color:var(--ink-2)}
+.kid .rto{font-weight:600;color:var(--ink)}
+.kid .rmeta{font-size:24px;line-height:40px;color:var(--ink-4);margin-top:6px}
+.allrep{
+  display:inline-flex;align-items:center;gap:12px;margin-top:20px;font-size:26px;font-weight:600;color:var(--ink);
+  background:none;border:0;border-top:1px solid var(--line);padding:22px 0 0;cursor:pointer;width:100%;text-align:left;
+}
+.allrep svg{width:28px;height:28px}
+
+/* ---------- 子回复全屏页 ---------- */
+.parentbox{margin:0 64px 8px;border:1px solid var(--line);padding:32px 36px;background:var(--paper-2)}
+.parentbox .who{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.parentbox .who b{font-size:30px;font-weight:600;line-height:44px}
+.parentbox .who span{font-size:24px;color:var(--ink-3);line-height:40px}
+.parentbox p{font-size:30px;line-height:50px;color:var(--ink-2)}
+.pagent{padding:26px 64px;font-size:24px;line-height:40px;color:var(--ink-3);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:20px}
+.rep{padding:34px 64px;border-bottom:1px solid var(--line)}
+.rep .who{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;flex-wrap:wrap}
+.rep .who b{font-size:30px;font-weight:600;line-height:44px}
+.rep .who span{font-size:24px;color:var(--ink-3);line-height:40px}
+.rep p{font-size:32px;line-height:54px;color:var(--ink);margin-top:4px}
+.rep .rmeta{font-size:24px;line-height:40px;color:var(--ink-4);margin-top:10px}
+
+/* ---------- 离线页 ---------- */
+.offgroup{padding:36px 64px 0}
+.offgroup .gt{font-size:26px;letter-spacing:.1em;color:var(--ink-3);font-weight:600;padding-bottom:16px;border-bottom:1px solid var(--line-strong);margin-bottom:8px;display:flex;justify-content:space-between}
+.offgroup .gt span{letter-spacing:0;font-weight:400}
+.offrow{display:flex;gap:24px;padding:26px 0;border-bottom:1px solid var(--line);cursor:pointer;align-items:flex-start}
+.offrow .t{flex:1;font-size:32px;line-height:50px;font-weight:500}
+.offrow .m{font-size:24px;line-height:40px;color:var(--ink-3);margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+
+/* ---------- 空状态 ---------- */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 120px;text-align:center;gap:24px}
+.empty .big{font-size:36px;font-weight:600;line-height:56px}
+.empty p{font-size:28px;line-height:48px;color:var(--ink-3)}
+.empty .acts{display:flex;gap:20px;margin-top:12px}
+
+/* ---------- 直答 ---------- */
+.direct{padding:48px 64px 64px}
+.direct .lbl{font-size:24px;letter-spacing:.08em;color:var(--ink-3);font-weight:600;margin-bottom:18px}
+.direct textarea{
+  width:100%;height:260px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);
+  font:inherit;font-size:34px;line-height:56px;padding:26px 28px;resize:none;outline:none;
+}
+.direct textarea::placeholder{color:var(--ink-4)}
+.models{display:flex;gap:16px;margin:32px 0 40px;flex-wrap:wrap}
+.model{border:1px solid var(--line);color:var(--ink-3);font-size:26px;padding:18px 28px;cursor:pointer;background:var(--paper);font-family:inherit}
+.model.on{border-color:var(--ink);color:var(--ink);font-weight:700;border-width:2px;padding:17px 27px}
+.direct .note{font-size:24px;line-height:42px;color:var(--ink-3);margin-top:28px;display:flex;gap:14px}
+.aihint{border:1px solid var(--ink-3);padding:20px 26px;font-size:26px;line-height:40px;color:var(--ink-2);margin-bottom:34px;display:flex;gap:14px;align-items:center}
+
+/* ---------- 设置 ---------- */
+.setgroup{padding:36px 64px 8px}
+.setgroup .gt{font-size:26px;letter-spacing:.1em;font-weight:600;color:var(--ink-3);padding-bottom:14px;border-bottom:1px solid var(--line-strong);margin-bottom:4px}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:32px 0;border-bottom:1px solid var(--line);min-height:112px}
+.setrow .k{font-size:32px;line-height:48px;font-weight:500}
+.setrow .k em{font-style:normal;display:block;font-size:24px;line-height:40px;color:var(--ink-3);font-weight:400;margin-top:4px}
+.setrow .v{font-size:26px;color:var(--ink-3);display:flex;align-items:center;gap:20px;flex:none}
+.stepper{display:flex;align-items:center;gap:0;border:1px solid var(--ink)}
+.stepper button{width:88px;height:80px;border:0;background:var(--paper);color:var(--ink);font:inherit;font-size:34px;cursor:pointer;line-height:1}
+.stepper button:disabled{color:var(--ink-4)}
+.stepper .val{width:96px;text-align:center;font-size:30px;font-weight:600;border-left:1px solid var(--line);border-right:1px solid var(--line);height:80px;display:flex;align-items:center;justify-content:center;font-family:"Inter",sans-serif}
+.seg{display:flex;border:1px solid var(--ink)}
+.seg button{border:0;background:var(--paper);color:var(--ink-3);font:inherit;font-size:26px;padding:0 22px;height:80px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:var(--paper);font-weight:600}
+.switch{width:104px;height:56px;border:1px solid var(--ink);position:relative;background:var(--paper);cursor:pointer;flex:none}
+.switch i{position:absolute;top:5px;left:5px;width:44px;height:44px;background:var(--ink-3)}
+.switch.on{background:var(--ink)}
+.switch.on i{left:auto;right:5px;background:var(--paper)}
+.inforow{padding:30px 0;border-bottom:1px solid var(--line);font-size:26px;line-height:44px;color:var(--ink-2)}
+.inforow b{display:block;font-size:28px;color:var(--ink);font-weight:600;margin-bottom:6px}
+.dangerbtn{width:100%;height:112px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);font:inherit;font-size:30px;font-weight:600;cursor:pointer;margin-top:26px}
+.setfoot{font-size:23px;line-height:40px;color:var(--ink-4);padding:34px 0 60px}
+
+/* 暗黑下避免大面积反白：选中态与主按钮改为描边 + 加粗 */
+#device[data-theme="dark"] .seg button.on{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+#device[data-theme="dark"] .solidbtn{background:transparent;border:2px solid var(--ink);color:var(--ink)}
+
+/* ---------- 登录页 ---------- */
+.login{padding:64px 64px 0}
+.login h2{font-size:44px;line-height:62px;font-weight:700;margin-bottom:18px}
+.login .lead{font-size:30px;line-height:52px;color:var(--ink-2);margin-bottom:36px}
+.steps{border-top:1px solid var(--line)}
+.step{display:flex;gap:24px;padding:28px 0;border-bottom:1px solid var(--line);font-size:28px;line-height:48px;color:var(--ink-2)}
+.step b{font-family:"Inter",sans-serif;font-size:30px;color:var(--ink);flex:none;width:40px}
+.login .why{margin-top:32px;border:1px solid var(--line);padding:28px;font-size:26px;line-height:44px;color:var(--ink-2);background:var(--paper-2)}
+.login .btns{display:flex;flex-direction:column;gap:20px;margin-top:36px}
+.solidbtn{height:112px;background:var(--ink);color:var(--paper);border:1px solid var(--ink);font:inherit;font-size:30px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* ---------- 弹层：快捷设置 ---------- */
+#layers{position:absolute;inset:0;pointer-events:none;z-index:20}
+#layers > *{pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-top:2px solid var(--ink);
+  padding:26px 56px 30px;max-height:1180px;overflow-y:auto;
+}
+.sheet .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.sheet .sh b{font-size:30px;font-weight:700;letter-spacing:.02em}
+.sheet .sh button{background:none;border:0;font:inherit;font-size:27px;font-weight:600;color:var(--ink);cursor:pointer;padding:0 18px;height:84px;margin:-16px -14px -16px 0}
+.sheet .grp{padding:16px 0;border-bottom:1px solid var(--line)}
+.sheet .grp:last-child{border-bottom:0}
+.sheet .rowk{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:12px}
+.sheet .rowk .k{font-size:28px;font-weight:600}
+.sheet .rowk .v{font-size:24px;color:var(--ink-3)}
+.preview{border:1px solid var(--line);padding:14px 18px;font-size:calc(32px * var(--fs));line-height:var(--lh);color:var(--ink-2);margin-top:12px;max-height:136px;overflow:hidden}
+.refreshbtn{
+  width:100%;height:104px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);
+  font:inherit;font-size:28px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:14px;cursor:pointer;
+}
+.refreshbtn:active{background:var(--paper-2)}
+.refreshbtn svg{width:34px;height:34px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.finehint{font-size:22px;line-height:38px;color:var(--ink-3);margin-top:14px}
+
+/* ---------- 弹层：长按菜单 ---------- */
+.actionsheet{position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-top:2px solid var(--ink)}
+.actionsheet .hd{padding:28px 56px 20px;font-size:24px;color:var(--ink-3);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actionsheet button{
+  width:100%;height:112px;background:none;border:0;border-bottom:1px solid var(--line);
+  font:inherit;font-size:30px;color:var(--ink);text-align:left;padding:0 56px;cursor:pointer;display:flex;align-items:center;gap:18px;
+}
+.actionsheet button:active{background:var(--paper-2)}
+.actionsheet button.cancel{color:var(--ink-3);font-weight:400;border-bottom:0}
+
+/* ---------- toast ---------- */
+#toast{
+  position:absolute;left:64px;right:64px;bottom:196px;background:var(--ink);color:var(--paper);
+  font-size:27px;line-height:42px;padding:24px 32px;opacity:0;transition:opacity .12s linear;
+  pointer-events:none;z-index:30;text-align:center;
+}
+#toast.show{opacity:1}
+
+/* ---------- 墨屏闪屏 ---------- */
+#flash{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:40}
+</style>
+</head>
+<body>
+
+<aside id="panel">
+  <h1>知乎阅读 · PW4 原型</h1>
+  <div class="sub">1072 × 1448 ／ 灰阶 ／ 虚构数据</div>
+
+  <div class="grp">
+    <div class="grp-t">环境模拟</div>
+    <div class="sw" data-p="offline"><span>断网（隧道内）</span><span class="track"><i></i></span></div>
+    <div class="sw on" data-p="flash"><span>模拟墨水屏闪屏</span><span class="track"><i></i></span></div>
+    <div class="sw" data-p="dark"><span>暗黑模式</span><span class="track"><i></i></span></div>
+    <div class="sw" data-p="empty"><span>首次使用（无缓存）</span><span class="track"><i></i></span></div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-t">直达</div>
+    <div class="nav">
+      <button data-jump="home">热榜</button>
+      <button data-jump="question">回答列表</button>
+      <button data-jump="reading">阅读</button>
+      <button data-jump="comments">评论</button>
+      <button data-jump="replies">子回复</button>
+      <button data-jump="offline">离线</button>
+      <button data-jump="settings">设置</button>
+      <button data-jump="login">登录失效</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-t">操作</div>
+    <div class="nav">
+      <button id="btnFlash">全屏刷新（清残影）</button>
+      <button id="btnReset">重置原型</button>
+    </div>
+  </div>
+
+  <div class="tip">
+    长按列表条目可打开操作菜单；阅读页左右方向键切换上一条 / 下一条回答；Esc 返回上一页。<br>
+    全部文本为虚构示例，不含真实会话、密钥或回答内容。
+  </div>
+</aside>
+
+<div id="stage">
+  <div id="deviceWrap">
+    <div id="device">
+      <div id="app" data-theme="light"></div>
+      <div id="layers"></div>
+      <div id="toast"></div>
+      <div id="flash"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   虚构数据
+   ============================================================ */
+const T = '20:41'; // 缓存时刻
+
+const ANSWERS_Q1 = [
+  {
+    id:'a1', author:'陈屿', badge:'城市观察者', status:'full',
+    votes:'1.2 万', comments:386, got:'20:38 取得正文',
+    excerpt:'短视频的问题不是它太短，而是它把注意力切成了太多段。长文章提供的是一种连续的路，你从第一段走到最后一段，中间不需要反复决定要不要继续。',
+    body:[
+      '先说我自己的观察。过去两年我每天坐同一条线，早高峰里举着手机的人几乎都在刷短视频。但最近半年，我注意到另一件事：同一节车厢里，读完一篇长文的人会把手机放下，眼睛离开屏幕，看一会儿窗外。',
+      '短视频的问题不是它太短，而是它把注意力切成了太多段。每十五秒你就要做一次判断：继续看，还是划走。这个判断看起来不费力，实际上一直在消耗前额叶。一小时后你什么也没记住，却觉得比上班还累。',
+      '长文章提供的是一种连续的路。你从第一段走到最后一段，中间不需要反复决定要不要继续。对于每天已经被无数决定填满的人来说，这种「不用选」本身就是休息。',
+      '还有一个更实际的原因：地铁的信号。隧道里断断续续的网络，恰好惩罚了需要持续加载的短视频，而奖励了已经缓存好的文字。这不是审美选择，是环境筛选。',
+      '所以我不认为这是「阅读复兴」。更像是在一个不适合短视频的场景里，文字重新变成了最省力的选项。等哪天隧道里信号满格，这个结论可能又要改写。'
+    ]
+  },
+  {
+    id:'a2', author:'苏晚', badge:'', status:'excerpt',
+    votes:'3 428', comments:97, got:'20:39 仅取到摘要',
+    excerpt:'我觉得跟「能不能中途停下来」有关。短视频停下来会留下一个未完成，长文章停下来只留下一个句号。地铁经常要换乘、让座、突然到站。',
+    body:[
+      '我觉得跟「能不能中途停下来」有关。短视频停下来会留下一个未完成，手指会下意识想继续；长文章停下来只留下一个句号，随时可以合上。',
+      '地铁是一个随时会被打断的空间：换乘、让座、突然到站。被打断的成本越低，这个行为就越容易重复。'
+    ]
+  },
+  {
+    id:'a3', author:'何嘉树', badge:'', status:'limited',
+    votes:'2 106', comments:154, got:'正文受限',
+    excerpt:'这个问题在盐选里有一篇更完整的讨论，从注意力的经济学角度拆过一遍，这里不方便展开。',
+    body:[
+      '这个问题在盐选里有一篇更完整的讨论，从注意力的经济学角度拆过一遍，这里不方便展开。'
+    ],
+    reason:'该回答属于盐选内容，当前账号无阅读权限。已为你保留摘要，不显示未取得的正文。'
+  },
+  {
+    id:'a4', author:'周迟', badge:'通勤 4 小时', status:'cached',
+    votes:'986', comments:42, got:'20:12 缓存',
+    excerpt:'我反而觉得是短视频变长了、长文章变短了，两边在中间相遇。现在所谓的长文，很多也是三段一个金句。',
+    body:[
+      '我反而觉得是短视频变长了、长文章变短了，两边在中间相遇。现在所谓的长文，很多也是三段一个金句，读完记住的还是那三句。',
+      '真正留得住人的，是那种必须按顺序读、跳一段就接不上的文字。这种东西在任何年代都是少数。'
+    ]
+  },
+  {
+    id:'a5', author:'沈砚', badge:'', status:'full',
+    votes:'612', comments:18, got:'20:33 取得正文',
+    excerpt:'一个很小的细节：Kindle 打开是上次读到的地方，手机打开是一排红点。起点不同，行为就不同。',
+    body:[
+      '一个很小的细节：Kindle 打开是上次读到的地方，手机打开是一排红点。起点不同，行为就不同。',
+      '设备本身在替你决定接下来做什么。你把它放在哪，它就在哪替你做选择。'
+    ]
+  },
+  {
+    id:'a6', author:'顾长风', badge:'', status:'excerpt',
+    votes:'488', comments:9, got:'20:40 仅取到摘要',
+    excerpt:'我倒觉得不必对立。我在车上看长文，是因为它不需要耳机；不是因为短视频不好。',
+    body:['我倒觉得不必对立。我在车上看长文，是因为它不需要耳机；不是因为短视频不好。']
+  },
+  {
+    id:'a7', author:'程一', badge:'', status:'full',
+    votes:'301', comments:5, got:'20:31 取得正文',
+    excerpt:'地铁的扶手占了一只手，另一只手还要抓包。文字只需要一次滑动，视频需要一直举着。',
+    body:[
+      '地铁的扶手占了一只手，另一只手还要抓包。文字只需要一次滑动，视频需要一直举着。',
+      '身体姿态会反过来塑造内容选择，这一点常被忽略。'
+    ]
+  },
+  {
+    id:'a8', author:'闻笛', badge:'', status:'excerpt',
+    votes:'176', comments:2, got:'20:41 仅取到摘要',
+    excerpt:'我读长文是为了在到站前有一个明确的结束点。视频没有结束点。',
+    body:['我读长文是为了在到站前有一个明确的结束点。视频没有结束点。']
+  }
+];
+
+const QUESTIONS = [
+  {
+    id:'q1', rank:1, kind:'热榜', hot:'1 284 万热度', answersCount:'1 462',
+    title:'为什么越来越多人在地铁上读长文章，而不是刷短视频？',
+    author:'林知远',
+    excerpt:'通勤的十分钟里，短视频给的是一条条互不相干的刺激，长文章给的是一段连续的路。这两种东西对疲惫的人意味着什么？',
+    answers:ANSWERS_Q1
+  },
+  {
+    id:'q2', rank:2, kind:'热榜', hot:'986 万热度', answersCount:'873',
+    title:'Kindle 退场十年后，电子墨水屏为什么又回到了讨论里？',
+    author:'于怀',
+    excerpt:'不是因为它变得更好用了，而是因为「不被打断」这件事本身开始变得稀缺。',
+    answers:[
+      {id:'b1',author:'于怀',badge:'产品设计',status:'full',votes:'5 204',comments:214,got:'20:36 取得正文',
+       excerpt:'墨水屏的每一次刷新都要付出代价，这个代价反过来限制了产品能做的事。不能放视频、不能弹窗、不能无限下拉，剩下的事情就变得很单纯。',
+       body:['墨水屏的每一次刷新都要付出代价，这个代价反过来限制了产品能做的事。不能放视频、不能弹窗、不能无限下拉，剩下的事情就变得很单纯。',
+             '限制不是缺点，是这个品类的定义。一旦你接受「它只能显示静止的文字」，很多设计问题会自动消失。',
+             '所以它回到讨论里，未必是因为硬件进步，而是因为有一批人开始重新需要「只能做一件事」的设备。']},
+      {id:'b2',author:'卢见',badge:'',status:'excerpt',votes:'1 877',comments:66,got:'20:37 仅取到摘要',
+       excerpt:'残影是墨水屏的原罪。所有看起来很克制的设计，最后都是被残影逼出来的。',
+       body:['残影是墨水屏的原罪。所有看起来很克制的设计，最后都是被残影逼出来的。']},
+      {id:'b3',author:'许知白',badge:'',status:'limited',votes:'942',comments:31,got:'正文受限',
+       excerpt:'这里有一份关于墨水屏刷新策略的实测记录，涉及具体机型的对比，篇幅较长。',
+       body:['这里有一份关于墨水屏刷新策略的实测记录，涉及具体机型的对比，篇幅较长。'],
+       reason:'该回答引用了付费专栏内容，当前账号无权限。摘要保留，正文未取得。'}
+    ]
+  },
+  {
+    id:'q3', rank:3, kind:'热榜', hot:'774 万热度', answersCount:'512',
+    title:'长期在弱网环境里工作，是怎样一种体验？',
+    author:'白榆',
+    excerpt:'你会开始重新评估「哪些事情必须现在做」。大部分其实不必。',
+    answers:[
+      {id:'c1',author:'白榆',badge:'',status:'full',votes:'3 110',comments:128,got:'20:35 取得正文',
+       excerpt:'弱网教会我的第一件事是：先把要读的东西拿到本地。第二件事是：不要在没有网的时候做决定。',
+       body:['弱网教会我的第一件事是：先把要读的东西拿到本地。第二件事是：不要在没有网的时候做决定。',
+             '第三件事有点反直觉：你会开始珍惜等待。加载的那十几秒，是唯一没人能打断你的时间。']},
+      {id:'c2',author:'郑野',badge:'',status:'excerpt',votes:'655',comments:22,got:'20:38 仅取到摘要',
+       excerpt:'最难的不是慢，是不知道要等多久。有进度条的等待和无进度条的等待是两件事。',
+       body:['最难的不是慢，是不知道要等多久。有进度条的等待和无进度条的等待是两件事。']}
+    ]
+  },
+  {
+    id:'q4', rank:4, kind:'推荐', hot:'今日推荐', answersCount:'238',
+    title:'有哪些看起来很小、但真正改变了阅读习惯的设计？',
+    author:'程知微',
+    excerpt:'记住上次读到哪里。就这一条，比大多数阅读器的功能都重要。',
+    answers:[
+      {id:'d1',author:'程知微',badge:'',status:'full',votes:'2 041',comments:74,got:'20:34 取得正文',
+       excerpt:'记住上次读到哪里。就这一条，比大多数阅读器的功能都重要。它把「打开」这个动作的成本降到了零。',
+       body:['记住上次读到哪里。就这一条，比大多数阅读器的功能都重要。它把「打开」这个动作的成本降到了零。',
+             '第二个是「下一章」只有一个按钮。选择越少，继续读的概率越高。',
+             '第三个是段落间距。听起来是排版细节，实际决定了长文能不能读完。']},
+      {id:'d2',author:'李沧',badge:'',status:'excerpt',votes:'733',comments:19,got:'20:36 仅取到摘要',
+       excerpt:'把「返回」做成保留位置，而不是回到顶部。这一条让多少人放弃了长列表。',
+       body:['把「返回」做成保留位置，而不是回到顶部。这一条让多少人放弃了长列表。']}
+    ]
+  },
+  {
+    id:'q5', rank:5, kind:'热榜', hot:'653 万热度', answersCount:'396',
+    title:'通勤两小时，如何把碎片时间变成完整的阅读时间？',
+    author:'孟迟',
+    excerpt:'不要试图把碎片拼成整块，而是接受碎片，然后选一种经得起打断的读物。',
+    answers:[
+      {id:'e1',author:'孟迟',badge:'',status:'excerpt',votes:'1 526',comments:58,got:'20:40 仅取到摘要',
+       excerpt:'不要试图把碎片拼成整块，而是接受碎片，然后选一种经得起打断的读物。短篇、问答、评论，都比长篇小说合适。',
+       body:['不要试图把碎片拼成整块，而是接受碎片，然后选一种经得起打断的读物。']},
+      {id:'e2',author:'徐斯年',badge:'',status:'full',votes:'890',comments:27,got:'20:39 取得正文',
+       excerpt:'我的做法是只带一个设备，且这个设备上不装任何会推送的东西。',
+       body:['我的做法是只带一个设备，且这个设备上不装任何会推送的东西。',
+             '不是靠自律，是靠减少选项。自律会用完，选项不会自己回来。']}
+    ]
+  }
+];
+
+const COMMENTS_Q1 = [
+  {
+    id:'c1', author:'江野', time:'20:12', likes:'236',
+    text:'隧道里刷视频卡住的那一下，真的会让人暴躁。尤其是缓冲圈转到一半停住的时候。',
+    kids:[
+      {author:'陈屿', replyTo:'江野', text:'对，卡顿的成本比内容本身更贵。', meta:'20:18 · 42 赞'},
+      {author:'阿澈', replyTo:'江野', text:'我现在进隧道前会先下好一篇文章，出隧道再刷视频。', meta:'20:21 · 18 赞'}
+    ],
+    total:2
+  },
+  {
+    id:'c2', author:'罗青', time:'20:03', likes:'512',
+    text:'但长文章也有很多注水的，读完一千字什么也没得到。问题不在长短，在密度。',
+    kids:[
+      {author:'陈屿', replyTo:'罗青', text:'同意，密度比长度重要。我上面说的「连续」是必要不充分。', meta:'20:09 · 96 赞'},
+      {author:'罗青', replyTo:'陈屿', text:'那怎么判断密度？总不能先读一半再决定。', meta:'20:11 · 24 赞'}
+    ],
+    total:12
+  },
+  {
+    id:'c3', author:'温故', time:'19:48', likes:'188',
+    text:'同意「环境筛选」这个说法。我坐高铁会读书，坐地铁只会刷手机，因为高铁有座、有桌板，地铁没有。',
+    kids:[
+      {author:'陈屿', replyTo:'温故', text:'身体姿态确实被低估了。举着手机十分钟，手会先放弃。', meta:'19:56 · 33 赞'}
+    ],
+    total:1
+  },
+  {
+    id:'c4', author:'白露', time:'19:31', likes:'64',
+    text:'希望地铁能有个信号稳定的车厢，这样大家就不用做选择了。',
+    kids:[],
+    total:0
+  }
+];
+
+const REPLIES_Q1_C2 = [
+  {author:'陈屿', replyTo:'罗青', text:'先看结尾。如果最后一段还在重复开头，中间基本可以跳过。', meta:'20:12 · 40 赞'},
+  {author:'罗青', replyTo:'陈屿', text:'这个技巧有点冒险，很多好文章结尾才收口。', meta:'20:14 · 21 赞'},
+  {author:'程一', replyTo:'罗青', text:'我的判断更粗暴：看有没有具体数字和具体场景。全是形容词的直接划走。', meta:'20:15 · 66 赞'},
+  {author:'罗青', replyTo:'程一', text:'这条我认。形容词密度高的一般都是在凑字数。', meta:'20:16 · 12 赞'},
+  {author:'闻笛', replyTo:'罗青', text:'其实平台也在推长的，因为完读率高的内容广告位更多。', meta:'20:18 · 9 赞'},
+  {author:'陈屿', replyTo:'闻笛', text:'这个角度有意思，但完读率的统计口径本身就可疑。', meta:'20:19 · 17 赞'},
+  {author:'顾长风', replyTo:'罗青', text:'我干脆只看收藏夹里存了半年还没删的，那些基本都有密度。', meta:'20:22 · 31 赞'},
+  {author:'苏晚', replyTo:'顾长风', text:'这个方法好，相当于让别人先替你筛了一遍。', meta:'20:24 · 8 赞'},
+  {author:'罗青', replyTo:'苏晚', text:'但收藏夹也会膨胀，最后变成一个不看的仓库。', meta:'20:26 · 14 赞'},
+  {author:'何嘉树', replyTo:'罗青', text:'所以我改成每周清一次，没读完的直接删，不给自己留后路。', meta:'20:28 · 19 赞'},
+  {author:'沈砚', replyTo:'何嘉树', text:'删的时候会心疼，但其实一年也不会回头找。', meta:'20:30 · 7 赞'},
+  {author:'罗青', replyTo:'沈砚', text:'你说服我了，今晚就清。', meta:'20:33 · 5 赞'}
+];
+
+const OFFLINE_GROUPS = [
+  {name:'热榜', note:'20:41 更新 · 30 条', items:[
+    {t:'为什么越来越多人在地铁上读长文章，而不是刷短视频？', m:'20:41 · 已读 4 / 8 条回答', tag:'正文已缓存'},
+    {t:'Kindle 退场十年后，电子墨水屏为什么又回到了讨论里？', m:'20:36 · 3 条回答摘要', tag:'仅摘要'},
+    {t:'长期在弱网环境里工作，是怎样一种体验？', m:'20:35 · 2 条回答', tag:'正文已缓存'}
+  ]},
+  {name:'推荐', note:'20:12 更新 · 第 2 批', items:[
+    {t:'有哪些看起来很小、但真正改变了阅读习惯的设计？', m:'20:34 · 2 条回答摘要', tag:'仅摘要'}
+  ]},
+  {name:'回答与评论', note:'已取得正文 6 篇', items:[
+    {t:'陈屿：短视频的问题不是它太短，而是它把注意力切成了太多段', m:'20:38 · 评论 4 条 · 子回复 14 条', tag:'正文已缓存'},
+    {t:'周迟：我反而觉得是短视频变长了、长文章变短了', m:'20:12 · 评论未缓存', tag:'正文已缓存'}
+  ]},
+  {name:'直答', note:'1 条结果', items:[
+    {t:'问：通勤时间适合读什么？', m:'昨天 22:06 · 生成结果 1 240 字', tag:'已保存'}
+  ]}
+];
+
+/* ============================================================
+   图标
+   ============================================================ */
+const I = {
+  back:'<svg viewBox="0 0 40 40"><path d="M24 8 12 20l12 12"/></svg>',
+  sliders:'<svg viewBox="0 0 40 40"><path d="M8 12h24M8 28h24"/><circle cx="15" cy="12" r="4"/><circle cx="27" cy="28" r="4"/></svg>',
+  refresh:'<svg viewBox="0 0 40 40"><path d="M32 20a12 12 0 1 1-4-9"/><path d="M33 8v8h-8"/></svg>',
+  screen:'<svg viewBox="0 0 40 40"><rect x="6" y="8" width="28" height="24"/><path d="M14 20h12"/></svg>',
+  comment:'<svg viewBox="0 0 40 40"><path d="M34 18c0 6-6 11-14 11-2 0-4 0-5-1l-7 3 2-6c-2-2-4-4-4-7 0-6 6-11 14-11s14 5 14 11z"/></svg>',
+  prev:'<svg viewBox="0 0 40 40"><path d="M26 8 14 20l12 12"/></svg>',
+  next:'<svg viewBox="0 0 40 40"><path d="M14 8l12 12-12 12"/></svg>',
+  doc:'<svg viewBox="0 0 40 40"><path d="M10 6h14l6 6v22H10z"/><path d="M24 6v6h6"/></svg>',
+  text:'<svg viewBox="0 0 40 40"><path d="M8 10h24M8 20h24M8 30h16"/></svg>',
+  wifi:'<svg viewBox="0 0 40 40"><path d="M6 14c8-6 20-6 28 0"/><path d="M12 21c5-4 11-4 16 0"/><circle cx="20" cy="29" r="2"/><path d="M6 6l28 28"/></svg>',
+  check:'<svg viewBox="0 0 40 40"><path d="M8 21l8 8 16-17"/></svg>'
+};
+
+/* ============================================================
+   状态
+   ============================================================ */
+const FS_STEPS = [0.88, 0.94, 1, 1.08, 1.17];
+const LH_STEPS = [1.55, 1.79, 2.05];
+const LH_NAME = ['紧凑', '标准', '宽松'];
+const FS_NAME = ['很小', '偏小', '标准', '偏大', '很大'];
+
+const state = {
+  tab:'hot',
+  stack:[{view:'home'}],
+  prefs:{fs:2, lh:1, dark:false, light:6, flash:false, refreshPolicy:0},
+  offline:false,
+  cacheTime:T,
+  stale:false,
+  banner:null,
+  batch:{},
+  batchNo:2,
+  empty:false,
+  scroll:{},
+  sheet:null,
+  menu:null,
+  direct:{q:'',model:0,result:false},
+  read:{qid:'q1', idx:0, mode:'body'}
+};
+
+const app = document.getElementById('app');
+const layers = document.getElementById('layers');
+const toastEl = document.getElementById('toast');
+const flashEl = document.getElementById('flash');
+
+const qById = id => QUESTIONS.find(q => q.id === id) || QUESTIONS[0];
+const cur = () => state.stack[state.stack.length-1];
+
+/* ============================================================
+   通用渲染件
+   ============================================================ */
+function statusTag(a){
+  if(a.status === 'full') return '<span class="tag solid">已取得正文</span>';
+  if(a.status === 'cached') return '<span class="tag solid">缓存正文</span>';
+  if(a.status === 'limited') return '<span class="tag warn">正文受限</span>';
+  return '<span class="tag">仅摘要</span>';
+}
+
+function homeRow(q, i, kind){
+  const top = i === 0 ? ' top' : '';
+  return `
+  <article class="row" data-action="open-q" data-id="${q.id}">
+    <div class="row-rank num${top}">${String(i+1).padStart(2,'0')}</div>
+    <div class="row-main">
+      <div class="kicker"><span>${kind || q.kind}</span><span class="sep"></span><span>${q.hot}</span></div>
+      <h2 class="row-title">${q.title}</h2>
+      <p class="row-ex">${q.excerpt}</p>
+      <div class="row-meta"><span>${q.author}</span><span class="sep"></span><span>${q.answersCount} 个回答</span></div>
+    </div>
+  </article>`;
+}
+
+/* ============================================================
+   视图：首页（热榜 / 推荐 / 直答）
+   ============================================================ */
+function homeHead(){
+  return `
+  <header class="titlebar">
+    <div class="brand">知乎阅读<span class="ver">墨水版</span></div>
+    <div class="right">
+      ${state.offline ? '<span class="offbadge">离线</span>' : '<span class="acctstate">已登录</span>'}
+      <button class="iconbtn" data-action="open-settings" aria-label="设置">${I.sliders}</button>
+    </div>
+  </header>
+  <nav class="channels">
+    ${['hot','recommend','offline','direct'].map(t=>{
+      const name = {hot:'热榜',recommend:'推荐',offline:'离线',direct:'直答'}[t];
+      return `<button class="ch${state.tab===t?' on':''}" data-action="tab" data-tab="${t}">${name}</button>`;
+    }).join('')}
+  </nav>`;
+}
+
+function viewHome(){
+  const tab = state.tab;
+
+  if(tab === 'direct') return homeHead() + viewDirect();
+  if(tab === 'offline') return homeHead() + viewOffline();
+
+  const baseList = tab === 'recommend' ? QUESTIONS.slice(2).concat(QUESTIONS.slice(0,2)) : QUESTIONS;
+  const shift = tab === 'recommend' ? (state.batchNo - 1) % baseList.length : 0;
+  const list = baseList.slice(shift).concat(baseList.slice(0, shift));
+  const cacheLabel = tab === 'recommend'
+    ? `缓存 ${state.cacheTime} · 第 ${state.batchNo} 批`
+    : `缓存 ${state.cacheTime} · ${list.length} 条`;
+
+  const pager = tab === 'recommend' ? `
+    <div class="pager">
+      <button data-action="batch-prev" ${state.batchNo<=1?'disabled':''}>‹ 上一批</button>
+      <div class="mid">第 ${state.batchNo} / 6 批</div>
+      <button data-action="batch-next" ${state.batchNo>=6?'disabled':''}>下一批 ›</button>
+    </div>` : '';
+
+  const empty = state.empty && tab === 'hot';
+
+  return homeHead() + `
+    <div class="cachebar">
+      <span class="meta">${empty ? '本机暂无缓存 · 尚未联网' : cacheLabel}</span>
+      <button class="ghostbtn" data-action="refresh-content">${I.refresh}${empty?'联网刷新':'刷新内容'}</button>
+    </div>
+    ${state.banner ? bannerHTML() : ''}
+    ${pager}
+    ${empty ? `
+      <div class="empty">
+        <div class="big">还没有缓存内容</div>
+        <p>第一次启动不等待网络，直接显示本机缓存。当前没有可用内容，可以主动联网刷新一次；隧道里没有信号时会停在这一页。</p>
+        <div class="acts">
+          <button class="ghostbtn" data-action="refresh-content">${I.refresh}联网刷新</button>
+          <button class="ghostbtn" data-action="open-settings">查看设置</button>
+        </div>
+      </div>`
+    : `<div class="scroll" id="scroller">
+      ${list.map((q,i)=>homeRow(q,i,tab==='recommend'?'推荐':null)).join('')}
+      <div class="morebar">
+        <div class="batchend">已到本批末尾 · 刷新内容获取更多</div>
+      </div>
+    </div>`}`;
+}
+
+function bannerHTML(){
+  return `<div class="banner"><b>${state.banner.title}</b><span>${state.banner.text}</span>
+    <button class="x" data-action="close-banner" aria-label="关闭">×</button></div>`;
+}
+
+function viewDirect(){
+  return `
+  <div class="scroll" id="scroller">
+    <div class="direct">
+      <div class="lbl">提问</div>
+      <textarea id="dq" placeholder="输入一个可以展开的问题，例如：通勤时间适合读什么？">${state.direct.q}</textarea>
+      <div class="lbl" style="margin-top:36px">模型</div>
+      <div class="models">
+        ${['快速','深度','长文'].map((m,i)=>`<button class="model${state.direct.model===i?' on':''}" data-action="model" data-i="${i}">${m}模式</button>`).join('')}
+      </div>
+      <button class="solidbtn" style="width:100%" data-action="direct-submit">生成回答</button>
+      <div class="note"><span>·</span><span>直答使用独立的开放平台密钥，与网页会话分开保存。生成结果为模型输出，不等于知乎用户回答。</span></div>
+      <div class="note"><span>·</span><span>${state.offline ? '当前离线，直答需要网络，暂不可用。' : '生成结果会保存到离线缓存，断网后仍可阅读。'}</span></div>
+    </div>
+  </div>`;
+}
+
+function viewDirectResult(){
+  return `
+  <div class="chead">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">直答结果<em>长文模式</em></div>
+  </div>
+  <div class="scroll" id="scroller">
+    <div class="article">
+      <div class="aihint"><span class="tag solid">直答</span><span>以下为模型生成内容，不是知乎用户回答，请自行判断。</span></div>
+      <h1 style="font-size:42px;line-height:60px">${state.direct.q || '通勤时间适合读什么？'}</h1>
+      <div class="src"><span>20:41 生成</span><span>·</span><span>1 240 字</span><span>·</span><span>已保存到缓存</span></div>
+      <p>通勤时间的核心约束不是长度，而是「被打断的频率」。地铁每三到五分钟就可能到站、换乘、让座，因此适合的读物要满足两个条件：能随时停下，且停下不吃亏。</p>
+      <p>第一类是问答。一个问题一个回答，本身就是完整的闭环，读完即结束，不必记住前文。第二类是短评与专栏的单篇，篇幅在两千字以内，结尾通常有收束。第三类才是长篇，但建议只在有座位的场景读。</p>
+      <p>反过来说，小说和其他需要连续记忆的文本，在通勤场景里的完成率很低。不是内容不好，是场景不匹配。</p>
+      <div class="end">· 生成内容结束 ·</div>
+    </div>
+  </div>
+  <div class="actionbar">
+    <button class="ab" data-action="back">${I.back}<span class="k">返回</span></button>
+    <button class="ab" data-action="toast" data-msg="已保存到离线缓存">${I.doc}<span class="k">保存</span></button>
+    <button class="ab" data-action="toast" data-msg="已复制，可粘贴到其他设备">${I.text}<span class="k">复制</span></button>
+  </div>`;
+}
+
+/* ============================================================
+   视图：离线
+   ============================================================ */
+function viewOffline(){
+  return `
+  <div class="cachebar">
+    <span class="meta">离线可读 · 共 7 项</span>
+    <button class="ghostbtn" data-action="refresh-content">${I.refresh}刷新内容</button>
+  </div>
+  ${state.banner ? bannerHTML() : ''}
+  <div class="scroll" id="scroller">
+    ${OFFLINE_GROUPS.map(g=>`
+      <div class="offgroup">
+        <div class="gt">${g.name}<span>${g.note}</span></div>
+        ${g.items.map(it=>`
+          <div class="offrow" data-action="open-offline" data-t="${it.t}">
+            <div style="flex:1">
+              <div class="t">${it.t}</div>
+              <div class="m"><span>${it.m}</span><span class="tag" style="height:40px;font-size:22px">${it.tag}</span></div>
+            </div>
+          </div>`).join('')}
+      </div>`).join('')}
+    <div class="morebar"><div class="batchend">缓存仅包含已取得的内容，不含图片</div></div>
+  </div>`;
+}
+
+/* ============================================================
+   视图：问题与回答列表
+   ============================================================ */
+function viewQuestion(qid){
+  const q = qById(qid);
+  const limit = state.batch[qid] || 5;
+  const shown = q.answers.slice(0, limit);
+  const hasMore = q.answers.length > limit;
+
+  const rows = shown.map((a) => `
+    <div class="ansrow" data-action="open-a" data-q="${q.id}" data-a="${a.id}">
+      <div class="who"><b>${a.author}</b>${a.badge?`<span>${a.badge}</span>`:''}</div>
+      <div class="ex">${a.excerpt}</div>
+      <div class="foot">
+        ${statusTag(a)}
+        <span class="n">${a.votes} 赞同</span>
+        <span class="n">·</span>
+        <span class="n">${a.comments} 评论</span>
+      </div>
+    </div>`).join('');
+
+  return `
+  <div class="readbar">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">问题</div>
+    <button class="ghostbtn" data-action="refresh-content">${I.refresh}刷新</button>
+  </div>
+  ${state.banner ? bannerHTML() : ''}
+  <div class="scroll" id="scroller">
+    <div class="qhead">
+      <h1>${q.title}</h1>
+      <div class="qex">${q.excerpt}</div>
+      <div class="qmeta"><span>${q.answersCount} 个回答</span><span>·</span><span>摘要按批加载</span></div>
+    </div>
+    ${rows}
+    <div class="morebar">
+      ${hasMore
+        ? `<button class="morebtn" data-action="more-answers" data-q="${q.id}">加载下一批（${shown.length} / ${q.answers.length}）</button>`
+        : `<div class="batchend">已显示全部 ${q.answers.length} 条回答</div>`}
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   视图：阅读
+   ============================================================ */
+function viewReading(qid, aid){
+  const q = qById(qid);
+  const a = q.answers.find(x=>x.id===aid) || q.answers[0];
+  const idx = q.answers.indexOf(a);
+  const mode = state.read.mode;
+  const isFull = a.status === 'full' || a.status === 'cached';
+
+  let hint = '';
+  if(a.status === 'limited'){
+    hint = `<div class="statehint"><b>正文不可用</b><span>${a.reason || '该回答需要更高权限，已保留摘要。'}</span></div>`;
+  } else if(!isFull){
+    hint = `<div class="statehint"><b>仅摘要</b><span>尚未取得正文。可点底栏「看全文」发起请求；失败时会继续显示摘要，不会冒充完整回答。</span></div>`;
+  } else if(mode === 'excerpt'){
+    hint = `<div class="statehint"><b>摘要视图</b><span>这是接口返回的摘要，不是完整正文。点底栏「看正文」切回。</span></div>`;
+  }
+
+  const paras = (mode === 'excerpt' || !isFull)
+    ? `<p>${a.excerpt}</p>`
+    : a.body.map(p=>`<p>${p}</p>`).join('');
+
+  const midLabel = (mode === 'excerpt' || !isFull) ? '看全文' : '看摘要';
+  const midIcon = (mode === 'excerpt' || !isFull) ? I.text : I.doc;
+
+  return `
+  <div class="readbar">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">回答 · ${a.author}</div>
+    <button class="aa" data-action="open-sheet" aria-label="阅读设置">Aa</button>
+  </div>
+  ${state.banner ? bannerHTML() : ''}
+  <div class="scroll" id="scroller">
+    <div class="article">
+      <div class="src">
+        <span>问题</span><span>·</span><span>${a.got}</span><span>·</span><span>第 ${idx+1} / ${q.answers.length} 条回答</span>
+      </div>
+      <h1>${q.title}</h1>
+      <div class="byline">
+        <div class="who">
+          <b>${a.author}</b>
+          <span>${a.badge ? a.badge + ' · ' : ''}${a.votes} 赞同</span>
+        </div>
+        ${statusTag(a)}
+      </div>
+      ${hint}
+      ${paras}
+      <div class="end">· 回答结束 ·</div>
+    </div>
+  </div>
+  <div class="actionbar">
+    <button class="ab" data-action="prev-a">${I.prev}<span class="k">上一条</span></button>
+    <button class="ab" data-action="open-comments">${I.comment}<span class="k">评论 ${a.comments}</span></button>
+    <button class="ab" data-action="toggle-mode">${midIcon}<span class="k">${midLabel}</span></button>
+    <button class="ab" data-action="refresh-body">${I.refresh}<span class="k">刷新正文</span></button>
+    <button class="ab" data-action="next-a">${I.next}<span class="k">下一条</span></button>
+  </div>`;
+}
+
+/* ============================================================
+   视图：评论
+   ============================================================ */
+function viewComments(qid, aid){
+  const q = qById(qid);
+  const a = q.answers.find(x=>x.id===aid) || q.answers[0];
+  const list = COMMENTS_Q1;
+
+  return `
+  <div class="chead">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">评论<em>${a.author} 的回答 · 共 ${a.comments} 条</em></div>
+    <button class="ghostbtn" data-action="refresh-content">${I.refresh}刷新</button>
+  </div>
+  ${state.banner ? bannerHTML() : ''}
+  <div class="scroll" id="scroller">
+    ${list.map(c=>`
+      <div class="cmt">
+        <div class="who"><b>${c.author}</b><span>${c.time}</span></div>
+        <div class="txt">${c.text}</div>
+        <div class="bar"><span>${c.likes} 赞同</span><button data-action="toast" data-msg="原型不提供回复与点赞">回复</button></div>
+        ${c.kids.length ? `
+          <div class="kids">
+            ${c.kids.map(k=>`
+              <div class="kid" data-action="open-replies" data-c="${c.id}">
+                <p><span class="rto">${k.author}</span> 回复 <span class="rto">${k.replyTo}</span>：${k.text}</p>
+                <div class="rmeta">${k.meta}</div>
+              </div>`).join('')}
+            ${c.total > c.kids.length ? `
+              <button class="allrep" data-action="open-replies" data-c="${c.id}">查看全部 ${c.total} 条回复 ${I.next}</button>` : ''}
+          </div>` : ''}
+      </div>`).join('')}
+    <div class="morebar">
+      <button class="morebtn" data-action="toast" data-msg="加载下一批评论（原型省略）">加载下一批评论</button>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   视图：子回复全屏
+   ============================================================ */
+function viewReplies(page){
+  const p = page || 0;
+  const per = 6;
+  const total = REPLIES_Q1_C2.length;
+  const slice = REPLIES_Q1_C2.slice(p*per, p*per+per);
+
+  return `
+  <div class="chead">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">全部 ${total} 条回复<em>第 ${p+1} / ${Math.ceil(total/per)} 页</em></div>
+  </div>
+  <div class="scroll" id="scroller">
+    <div style="padding-top:26px">
+      <div class="parentbox">
+        <div class="who"><b>罗青</b><span>20:03</span></div>
+        <p>但长文章也有很多注水的，读完一千字什么也没得到。问题不在长短，在密度。</p>
+      </div>
+    </div>
+    <div class="pagent"><span>回复按时间排序</span><span>${p*per+1}–${Math.min(total,(p+1)*per)} / ${total}</span></div>
+    ${slice.map(r=>`
+      <div class="rep">
+        <div class="who"><b>${r.author}</b><span>回复 ${r.replyTo}</span></div>
+        <p>${r.text}</p>
+        <div class="rmeta">${r.meta}</div>
+      </div>`).join('')}
+    <div class="morebar">
+      ${(p+1)*per < total
+        ? `<button class="morebtn" data-action="next-page" data-p="${p+1}">下一批回复</button>`
+        : `<div class="batchend">已到最后一页</div>`}
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   视图：设置
+   ============================================================ */
+function viewSettings(){
+  const p = state.prefs;
+  return `
+  <div class="titlebar" style="padding-left:16px;justify-content:flex-start;gap:4px">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="brand" style="font-size:36px">设置与账号</div>
+  </div>
+  <div class="scroll" id="scroller">
+
+    <div class="setgroup">
+      <div class="gt">阅读显示</div>
+      <div class="setrow">
+        <div class="k">字体大小<em>${FS_NAME[p.fs]} · ${Math.round(FS_STEPS[p.fs]*38)}px</em></div>
+        <div class="stepper">
+          <button data-action="fs-minus" ${p.fs===0?'disabled':''}>−</button>
+          <div class="val">${p.fs+1}/5</div>
+          <button data-action="fs-plus" ${p.fs===4?'disabled':''}>＋</button>
+        </div>
+      </div>
+      <div class="setrow">
+        <div class="k">行距<em>正文与段落间距同步变化</em></div>
+        <div class="seg">
+          ${LH_NAME.map((n,i)=>`<button class="${p.lh===i?'on':''}" data-action="lh" data-i="${i}">${n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="setrow">
+        <div class="k">前光亮度<em>${p.light===0?'已关灯':'亮度 '+p.light+' / 10'} · 退出后恢复系统亮度</em></div>
+        <div class="stepper">
+          <button data-action="light-minus" ${p.light===0?'disabled':''}>−</button>
+          <div class="val">${p.light}</div>
+          <button data-action="light-plus" ${p.light===10?'disabled':''}>＋</button>
+        </div>
+      </div>
+      <div class="setrow">
+        <div class="k">暗黑模式<em>正文、列表、评论、弹窗一起切换</em></div>
+        <div class="switch ${p.dark?'on':''}" data-action="toggle-dark"><i></i></div>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <div class="gt">屏幕刷新</div>
+      <div class="setrow">
+        <div class="k">刷新策略<em>全刷频率需在 PW4 实测后确定</em></div>
+        <div class="seg">
+          ${['自动','每次翻页','减少闪烁'].map((n,i)=>`<button class="${p.refreshPolicy===i?'on':''}" data-action="policy" data-i="${i}">${n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="setrow" style="border-bottom:0">
+        <div class="k">立即全屏刷新<em>只重绘屏幕，不联网、不改缓存与阅读位置</em></div>
+        <button class="ghostbtn" data-action="flash">${I.screen}清除残影</button>
+      </div>
+      <div class="inforow">「刷新正文」「刷新内容」会请求知乎；「清除残影」只重绘屏幕。两者入口与文字始终区分。</div>
+    </div>
+
+    <div class="setgroup">
+      <div class="gt">账号与接口</div>
+      <div class="setrow">
+        <div class="k">登录状态<em>${state.offline?'离线，上次校验 20:12':'会话有效 · 20:12 校验'}</em></div>
+        <div class="v"><span class="tag ${state.offline?'':'solid'}">${state.offline?'离线':'已登录'}</span></div>
+      </div>
+      <div class="setrow">
+        <div class="k">浏览器会话导入<em>从桌面浏览器导出 Cookie 后粘贴，仅保存在本机</em></div>
+        <button class="ghostbtn" data-action="go-login">查看步骤</button>
+      </div>
+      <div class="setrow">
+        <div class="k">保持登录<em>关闭后每次启动都需要重新校验</em></div>
+        <div class="switch on" data-action="toast" data-msg="原型不修改登录策略"><i></i></div>
+      </div>
+      <div class="inforow">
+        <b>开放平台 Access Secret</b>
+        与网页会话分开保存，只用于知乎直答。两者互不替代，也不会上传到同一位置。
+      </div>
+      <button class="dangerbtn" data-action="logout-agent">退出登录（演示）</button>
+      <div class="setfoot">知乎阅读 0.1 · Kindle Paperwhite 4 · 1072 × 1448<br>本页所有设置为本地状态，原型不发起真实请求。</div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   视图：登录失效
+   ============================================================ */
+function viewLogin(){
+  return `
+  <div class="chead">
+    <button class="iconbtn" data-action="back">${I.back}</button>
+    <div class="ttl">账号</div>
+  </div>
+  <div class="scroll" id="scroller">
+    <div class="login">
+      <div class="kicker" style="margin-bottom:14px"><span class="tag warn">会话失效</span></div>
+      <h2>需要重新导入浏览器会话</h2>
+      <div class="lead">当前会话已被知乎拒绝（人机验证）。设备上直接扫码尚未打通，导入会话是目前唯一可靠的登录方式。</div>
+      <div class="steps">
+        <div class="step"><b>01</b><span>在电脑浏览器登录知乎，打开开发者工具复制 Cookie。</span></div>
+        <div class="step"><b>02</b><span>把 Cookie 存成文件，通过 USB 放到 Kindle 的 <span class="num">/mnt/us/zhihu/</span> 目录。</span></div>
+        <div class="step"><b>03</b><span>回到本页点「检查会话」，程序会读取并校验。</span></div>
+      </div>
+      <div class="why">离线阅读不受影响：已缓存的热榜、回答摘要、已取得正文与评论仍可打开，只是不能刷新内容。扫码登录仅作为候选方案，未在本稿中表现为可用能力。</div>
+      <div class="btns">
+        <button class="solidbtn" data-action="check-session">检查会话</button>
+        <button class="ghostbtn" style="height:112px;justify-content:center;width:100%" data-action="go-offline">继续离线阅读</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   渲染
+   ============================================================ */
+function render(){
+  saveScroll();              // 就地重绘（如调字号）前先记住位置
+  const v = cur();
+  let html = '';
+  if(v.view === 'home') html = viewHome();
+  else if(v.view === 'question') html = viewQuestion(v.qid);
+  else if(v.view === 'reading') html = viewReading(v.qid, v.aid);
+  else if(v.view === 'comments') html = viewComments(v.qid, v.aid);
+  else if(v.view === 'replies') html = viewReplies(v.page || 0);
+  else if(v.view === 'settings') html = viewSettings();
+  else if(v.view === 'login') html = viewLogin();
+  else if(v.view === 'directResult') html = viewDirectResult();
+
+  const dev = document.getElementById('device');
+  dev.dataset.theme = state.prefs.dark ? 'dark' : 'light';
+  dev.style.setProperty('--fs', FS_STEPS[state.prefs.fs]);
+  dev.style.setProperty('--lh', LH_STEPS[state.prefs.lh]);
+  app.innerHTML = html;
+  shownKey = scrollKey();
+  renderLayers();
+  restoreScroll();
+  const yParam = new URLSearchParams(location.search).get('y');
+  if(yParam){
+    const sc = document.getElementById('scroller');
+    if(sc) sc.scrollTop = Number(yParam);
+  }
+  syncPanel();
+}
+
+function scrollKey(){
+  const v = cur();
+  if(v.view === 'home') return 'home:'+state.tab;
+  return v.view+':'+(v.qid||'')+':'+(v.aid||'')+':'+((v.page)||0);
+}
+
+let shownKey = null;   // 当前 DOM 对应的滚动记录键
+
+function saveScroll(){
+  const sc = document.getElementById('scroller');
+  if(sc && shownKey) state.scroll[shownKey] = sc.scrollTop;
+}
+
+function restoreScroll(){
+  const sc = document.getElementById('scroller');
+  if(!sc) return;
+  const y = state.scroll[scrollKey()] || 0;
+  sc.scrollTop = y;
+}
+
+function renderLayers(){
+  let html = '';
+  if(state.menu) html += menuHTML();
+  if(state.sheet) html += sheetHTML();
+  layers.innerHTML = html;
+}
+
+/* 快捷设置面板 */
+function sheetHTML(){
+  const p = state.prefs;
+  return `
+  <div class="sheet">
+    <div class="sh">
+      <b>阅读显示</b>
+      <button data-action="close-sheet">完成</button>
+    </div>
+    <div class="grp">
+      <div class="rowk"><span class="k">字体大小</span><span class="v">${Math.round(38*FS_STEPS[p.fs])} px</span></div>
+      <div class="stepper" style="width:100%;justify-content:space-between">
+        <button data-action="fs-minus" ${p.fs===0?'disabled':''} style="flex:1">A−</button>
+        <div class="val" style="flex:1;border-left:1px solid var(--line)">${p.fs+1} / 5</div>
+        <button data-action="fs-plus" ${p.fs===4?'disabled':''} style="flex:1">A＋</button>
+      </div>
+      <div class="preview">长文章提供的是一种连续的路，你从第一段走到最后一段。</div>
+    </div>
+    <div class="grp">
+      <div class="rowk"><span class="k">行距</span><span class="v">${LH_NAME[p.lh]}</span></div>
+      <div class="seg" style="width:100%">
+        ${LH_NAME.map((n,i)=>`<button style="flex:1" class="${p.lh===i?'on':''}" data-action="lh" data-i="${i}">${n}</button>`).join('')}
+      </div>
+    </div>
+    <div class="grp" style="display:flex;align-items:center;justify-content:space-between;gap:24px">
+      <div>
+        <div style="font-size:28px;font-weight:600">前光 <span style="color:var(--ink-3);font-weight:400;font-size:24px">${p.light===0?'已关灯':p.light+' / 10'}</span></div>
+        <div class="finehint" style="margin-top:6px">退出后恢复系统亮度</div>
+      </div>
+      <div class="stepper">
+        <button data-action="light-minus" ${p.light===0?'disabled':''}>−</button>
+        <div class="val">${p.light}</div>
+        <button data-action="light-plus" ${p.light===10?'disabled':''}>＋</button>
+      </div>
+    </div>
+    <div class="grp" style="display:flex;align-items:center;justify-content:space-between">
+      <div><span class="k" style="font-size:28px;font-weight:600">暗黑模式</span>
+        <div class="finehint" style="margin-top:4px">切换时整屏重绘，保留阅读位置</div></div>
+      <div class="switch ${p.dark?'on':''}" data-action="toggle-dark"><i></i></div>
+    </div>
+    <div class="grp">
+      <button class="refreshbtn" data-action="flash">${I.screen}清除残影 · 全屏刷新</button>
+      <div class="finehint">只重绘屏幕，不联网，不改变缓存与阅读位置。与「刷新正文」不是同一件事。</div>
+    </div>
+  </div>`;
+}
+
+/* 长按菜单 */
+function menuHTML(){
+  const m = state.menu;
+  return `
+  <div class="actionsheet">
+    <div class="hd"><span style="color:var(--ink-4)">长按 · </span>${m.title}</div>
+    <button data-action="menu-read">${I.doc}阅读摘要</button>
+    <button data-action="menu-fetch">${I.refresh}尝试获取正文</button>
+    <button data-action="menu-comments">${I.comment}查看评论</button>
+    <button data-action="menu-link">${I.text}复制原始链接 / 用手机打开</button>
+    <button class="cancel" data-action="close-menu">取消</button>
+  </div>`;
+}
+
+/* ============================================================
+   交互
+   ============================================================ */
+function go(view){
+  saveScroll();
+  state.sheet = null;
+  state.menu = null;
+  state.stack.push(view);
+  if(state.prefs.flash) inkFlash(90);
+  render();
+}
+
+function back(){
+  saveScroll();
+  if(state.stack.length <= 1){
+    state.stack = [{view:'home'}];
+    state.tab = 'hot';
+  } else {
+    state.stack.pop();
+  }
+  state.sheet = null;
+  state.menu = null;
+  if(state.prefs.flash) inkFlash(70);
+  render();
+}
+
+function setTab(t){
+  saveScroll();
+  if(t === state.tab && cur().view === 'home') return;
+  state.tab = t;
+  state.stack = [{view:'home'}];
+  state.sheet = null;
+  state.menu = null;
+  if(state.prefs.flash) inkFlash(70);
+  render();
+}
+
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>toastEl.classList.remove('show'), 2200);
+}
+
+function inkFlash(ms){
+  flashEl.style.transition = 'none';
+  flashEl.style.background = '#000';
+  flashEl.style.opacity = '0.92';
+  requestAnimationFrame(()=>{
+    setTimeout(()=>{
+      flashEl.style.background = '#fff';
+      setTimeout(()=>{
+        flashEl.style.transition = 'opacity .10s linear';
+        flashEl.style.opacity = '0';
+      }, ms);
+    }, 40);
+  });
+}
+
+/* 阅读上下文 */
+function readingCtx(){
+  const q = qById(state.read.qid);
+  return {q, a:q.answers[state.read.idx]};
+}
+
+function openReading(qid, aid, mode){
+  const q = qById(qid);
+  const i = Math.max(0, q.answers.findIndex(x=>x.id===aid));
+  state.read = {qid, idx:i, mode:mode || ((q.answers[i].status==='full'||q.answers[i].status==='cached') ? 'body' : 'excerpt')};
+  go({view:'reading', qid, aid:q.answers[i].id});
+}
+
+/* 事件委托 */
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const a = el.dataset.action;
+
+  switch(a){
+    case 'tab': setTab(el.dataset.tab); return;
+    case 'back': back(); return;
+
+    case 'open-q': openQuestion(el.dataset.id); return;
+    case 'open-a': openReading(el.dataset.q, el.dataset.a); return;
+    case 'open-comments': go({view:'comments', qid:state.read.qid, aid:readingCtx().a.id}); return;
+    case 'open-replies': go({view:'replies', page:0}); return;
+    case 'next-page': go({view:'replies', page:Number(el.dataset.p)}); return;
+
+    case 'open-sheet': state.sheet = true; renderLayers(); return;
+    case 'close-sheet': state.sheet = null; renderLayers(); return;
+
+    case 'prev-a': switchAnswer(-1); return;
+    case 'next-a': switchAnswer(1); return;
+
+    case 'toggle-mode': toggleMode(); return;
+    case 'refresh-body': refreshBody(); return;
+
+    case 'fs-minus':
+      if(state.prefs.fs>0){ state.prefs.fs--; render(); }
+      return;
+    case 'fs-plus':
+      if(state.prefs.fs<4){ state.prefs.fs++; render(); }
+      return;
+    case 'lh':
+      state.prefs.lh = Number(el.dataset.i); render(); return;
+    case 'light-minus':
+      if(state.prefs.light>0){ state.prefs.light--; render(); }
+      return;
+    case 'light-plus':
+      if(state.prefs.light<10){ state.prefs.light++; render(); }
+      return;
+    case 'policy':
+      state.prefs.refreshPolicy = Number(el.dataset.i); render(); return;
+    case 'toggle-dark':
+      state.prefs.dark = !state.prefs.dark;
+      inkFlash(120);
+      render();
+      return;
+    case 'flash':
+      inkFlash(340);
+      toast('已全屏刷新，残影清除（未联网）');
+      return;
+
+    case 'refresh-content': refreshContent(el); return;
+    case 'batch-prev':
+      if(state.batchNo>1){ state.batchNo--; render(); }
+      return;
+    case 'batch-next':
+      if(state.batchNo<6){ state.batchNo++; render(); }
+      return;
+    case 'close-banner': state.banner = null; render(); return;
+
+    case 'more-answers': {
+      const qid = el.dataset.q;
+      state.batch[qid] = Math.min((state.batch[qid]||5)+3, qById(qid).answers.length);
+      render();
+      return;
+    }
+
+    case 'go-login': go({view:'login'}); return;
+    case 'go-offline': saveScroll(); state.tab='offline'; state.stack=[{view:'home'}]; render(); return;
+    case 'check-session':
+      toast(state.offline ? '网络不可用，无法校验会话' : '会话仍被拒绝：需要重新导入');
+      return;
+    case 'logout-agent':
+      toast('已清除本机会话（原型仅提示）');
+      return;
+    case 'open-offline': toast('打开缓存：' + el.dataset.t.slice(0,12) + '…'); return;
+
+    case 'model':
+      state.direct.model = Number(el.dataset.i); render(); return;
+    case 'direct-submit': {
+      const ta = document.getElementById('dq');
+      if(ta) state.direct.q = ta.value.trim();
+      if(state.offline){ toast('当前离线，直答需要网络'); return; }
+      go({view:'directResult'});
+      return;
+    }
+    case 'open-settings': go({view:'settings'}); return;
+
+    case 'toast': toast(el.dataset.msg || '原型未实现'); return;
+
+    case 'menu-read':
+      state.menu = null;
+      openReading(state.menuQ, state.menuA, 'excerpt');
+      return;
+    case 'menu-fetch': {
+      const a = qById(state.menuQ).answers.find(x=>x.id===state.menuA);
+      state.menu = null; renderLayers();
+      if(a.status === 'limited') toast('正文不可用：该回答需要更高权限');
+      else if(state.offline) toast('网络不可用，仍在显示摘要');
+      else toast('正在请求正文… 成功后阅读页会显示「已取得正文」');
+      return;
+    }
+    case 'menu-comments':
+      state.menu = null;
+      go({view:'comments', qid:state.menuQ, aid:state.menuA});
+      return;
+    case 'menu-link':
+      state.menu = null; renderLayers();
+      toast('链接已复制。Kindle 无浏览器时可生成二维码用手机打开');
+      return;
+    case 'close-menu': state.menu = null; renderLayers(); return;
+  }
+});
+
+function openQuestion(qid){
+  go({view:'question', qid});
+}
+
+function switchAnswer(dir){
+  const q = qById(state.read.qid);
+  const next = state.read.idx + dir;
+  if(next < 0){ toast('已经是第一条回答'); return; }
+  if(next >= q.answers.length){ toast('已经是最后一条回答'); return; }
+  state.read.idx = next;
+  state.read.mode = (q.answers[next].status==='full'||q.answers[next].status==='cached') ? 'body' : 'excerpt';
+  const v = cur();
+  v.aid = q.answers[next].id;
+  state.scroll[scrollKey()] = 0;
+  render();
+  const sc = document.getElementById('scroller');
+  if(sc) sc.scrollTop = 0;
+}
+
+function toggleMode(){
+  const {a} = readingCtx();
+  if(a.status === 'limited'){
+    toast('正文不可用：' + (a.reason || '需要更高权限'));
+    return;
+  }
+  if(a.status === 'excerpt'){
+    if(state.offline){ toast('网络不可用，仍在显示摘要'); return; }
+    toast('正在请求正文… 当前仍显示摘要');
+    return;
+  }
+  state.read.mode = state.read.mode === 'body' ? 'excerpt' : 'body';
+  render();
+}
+
+function refreshBody(){
+  const {a} = readingCtx();
+  if(state.offline){
+    state.banner = {title:'刷新失败', text:'网络不可用，正在显示 '+state.cacheTime+' 的缓存。阅读位置已保留。'};
+    render();
+    return;
+  }
+  if(a.status === 'limited'){ toast('该回答正文受限，刷新不会改变结果'); return; }
+  toast('正在刷新正文…');
+  setTimeout(()=>{
+    state.cacheTime = nowHM();
+    toast('正文已更新 · ' + state.cacheTime);
+    render();
+  }, 900);
+}
+
+function refreshContent(el){
+  if(state.offline){
+    state.banner = {title:'刷新失败', text:'网络不可用。' + state.cacheTime + ' 的缓存仍可阅读，位置已保留。'};
+    render();
+    return;
+  }
+  const old = el.innerHTML;
+  el.disabled = true;
+  el.innerHTML = I.refresh + '刷新中…';
+  setTimeout(()=>{
+    state.cacheTime = nowHM();
+    state.banner = null;
+    state.empty = false;
+    toast('已更新内容 · ' + state.cacheTime);
+    render();
+  }, 850);
+}
+
+function nowHM(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+/* 长按 */
+let pressTimer = null, longPressed = false;
+app.addEventListener('pointerdown', (e)=>{
+  const row = e.target.closest('[data-action="open-q"],[data-action="open-a"]');
+  if(!row) return;
+  longPressed = false;
+  const qid = row.dataset.action === 'open-q' ? row.dataset.id : row.dataset.q;
+  const aid = row.dataset.action === 'open-a' ? row.dataset.a : qById(qid).answers[0].id;
+  pressTimer = setTimeout(()=>{
+    longPressed = true;
+    state.menuQ = qid; state.menuA = aid;
+    state.menu = {title: qById(qid).title};
+    renderLayers();
+  }, 520);
+});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>{
+  app.addEventListener(ev, ()=>{ clearTimeout(pressTimer); });
+});
+app.addEventListener('click', (e)=>{
+  if(longPressed){ e.stopPropagation(); e.preventDefault(); longPressed = false; }
+}, true);
+
+/* 键盘 */
+document.addEventListener('keydown', (e)=>{
+  const v = cur();
+  if(e.key === 'Escape'){
+    if(state.sheet){ state.sheet = null; renderLayers(); return; }
+    if(state.menu){ state.menu = null; renderLayers(); return; }
+    back(); return;
+  }
+  if(v.view === 'reading'){
+    if(e.key === 'ArrowLeft'){ switchAnswer(-1); }
+    if(e.key === 'ArrowRight'){ switchAnswer(1); }
+  }
+});
+
+/* ============================================================
+   评审台
+   ============================================================ */
+function syncPanel(){
+  document.querySelectorAll('#panel .sw').forEach(sw=>{
+    const k = sw.dataset.p;
+    let on = false;
+    if(k === 'offline') on = state.offline;
+    if(k === 'flash') on = state.prefs.flash;
+    if(k === 'dark') on = state.prefs.dark;
+    if(k === 'empty') on = state.empty;
+    sw.classList.toggle('on', on);
+  });
+}
+
+document.querySelectorAll('#panel .sw').forEach(sw=>{
+  sw.addEventListener('click', ()=>{
+    const k = sw.dataset.p;
+    if(k === 'offline'){
+      state.offline = !state.offline;
+      if(state.offline){
+        state.banner = {title:'离线', text:'网络不可用。当前显示 '+state.cacheTime+' 的缓存，位置已保留。'};
+      } else {
+        state.banner = null;
+        toast('网络已恢复，可刷新内容');
+      }
+      render();
+    }
+    if(k === 'flash'){ state.prefs.flash = !state.prefs.flash; syncPanel(); }
+    if(k === 'dark'){ state.prefs.dark = !state.prefs.dark; inkFlash(120); render(); }
+    if(k === 'empty'){
+      state.empty = !state.empty;
+      if(state.empty){ state.tab = 'hot'; state.stack = [{view:'home'}]; }
+      render();
+    }
+  });
+});
+
+document.querySelectorAll('#panel [data-jump]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const j = btn.dataset.jump;
+    state.sheet = null; state.menu = null;
+    if(j === 'home'){ state.stack = [{view:'home'}]; state.tab = 'hot'; }
+    if(j === 'question'){ state.stack = [{view:'home'},{view:'question', qid:'q1'}]; }
+    if(j === 'reading'){ state.read = {qid:'q1', idx:0, mode:'body'}; state.stack = [{view:'home'},{view:'question', qid:'q1'},{view:'reading', qid:'q1', aid:'a1'}]; }
+    if(j === 'comments'){ state.stack = [{view:'home'},{view:'question', qid:'q1'},{view:'reading', qid:'q1', aid:'a1'},{view:'comments', qid:'q1', aid:'a1'}]; }
+    if(j === 'replies'){ state.stack = [{view:'home'},{view:'question', qid:'q1'},{view:'reading', qid:'q1', aid:'a1'},{view:'comments', qid:'q1', aid:'a1'},{view:'replies', page:0}]; }
+    if(j === 'offline'){ state.stack = [{view:'home'}]; state.tab = 'offline'; }
+    if(j === 'settings'){ state.stack = [{view:'home'},{view:'settings'}]; }
+    if(j === 'login'){ state.stack = [{view:'home'},{view:'settings'},{view:'login'}]; }
+    render();
+  });
+});
+
+document.getElementById('btnFlash').addEventListener('click', ()=>{
+  inkFlash(340);
+  toast('已全屏刷新，残影清除（未联网）');
+});
+
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  state.tab = 'hot';
+  state.stack = [{view:'home'}];
+  state.batch = {};
+  state.scroll = {};
+  state.banner = null;
+  state.offline = false;
+  state.sheet = null;
+  state.menu = null;
+  state.read = {qid:'q1', idx:0, mode:'body'};
+  state.direct = {q:'', model:0, result:false};
+  state.prefs = {fs:2, lh:1, dark:false, light:6, flash:false, refreshPolicy:0};
+  render();
+});
+
+/* ============================================================
+   缩放适配
+   ============================================================ */
+function fit(){
+  const solo = new URLSearchParams(location.search).has('solo');
+  const panel = document.getElementById('panel');
+  const stage = document.getElementById('stage');
+  panel.style.display = solo ? 'none' : '';
+  stage.style.paddingLeft = solo ? '0' : '300px';
+  const pad = solo ? 0 : 48;
+  const availW = window.innerWidth - (solo ? 0 : 300) - pad*2;
+  const availH = window.innerHeight - pad*2;
+  const s = Math.min(availW/1072, availH/1448, 1);
+  document.getElementById('device').style.transform = 'scale('+s+')';
+  document.getElementById('deviceWrap').style.width = (1072*s)+'px';
+  document.getElementById('deviceWrap').style.height = (1448*s)+'px';
+}
+window.addEventListener('resize', fit);
+
+/* 通过地址栏直达某一屏，便于评审与截图 */
+function bootFromHash(){
+  const h = (location.hash || '').replace('#','');
+  if(!h) return;
+  const dark = h.endsWith('-dark');
+  const key = h.replace('-dark','');
+  if(dark) state.prefs.dark = true;
+
+  const base = [{view:'home'}];
+  const map = {
+    hot:        ()=>{state.tab='hot'; state.stack=base;},
+    recommend:  ()=>{state.tab='recommend'; state.stack=base;},
+    offline:    ()=>{state.tab='offline'; state.stack=base; state.offline=true; state.banner={title:'离线',text:'网络不可用。当前显示 20:41 的缓存，位置已保留。'};},
+    direct:     ()=>{state.tab='direct'; state.stack=base;},
+    question:   ()=>{state.stack=[{view:'home'},{view:'question', qid:'q1'}];},
+    reading:    ()=>{state.read={qid:'q1',idx:0,mode:'body'}; state.stack=[{view:'home'},{view:'question',qid:'q1'},{view:'reading',qid:'q1',aid:'a1'}];},
+    excerpt:    ()=>{state.read={qid:'q1',idx:1,mode:'excerpt'}; state.stack=[{view:'home'},{view:'question',qid:'q1'},{view:'reading',qid:'q1',aid:'a2'}];},
+    limited:    ()=>{state.read={qid:'q1',idx:2,mode:'excerpt'}; state.stack=[{view:'home'},{view:'question',qid:'q1'},{view:'reading',qid:'q1',aid:'a3'}];},
+    comments:   ()=>{state.stack=[{view:'home'},{view:'question',qid:'q1'},{view:'reading',qid:'q1',aid:'a1'},{view:'comments',qid:'q1',aid:'a1'}];},
+    replies:    ()=>{state.stack=[{view:'home'},{view:'question',qid:'q1'},{view:'reading',qid:'q1',aid:'a1'},{view:'comments',qid:'q1',aid:'a1'},{view:'replies',page:0}];},
+    settings:   ()=>{state.stack=[{view:'home'},{view:'settings'}];},
+    login:      ()=>{state.stack=[{view:'home'},{view:'settings'},{view:'login'}];},
+    sheet:      ()=>{state.read={qid:'q1',idx:0,mode:'body'}; state.stack=[{view:'home'},{view:'reading',qid:'q1',aid:'a1'}]; state.sheet=true;},
+    result:     ()=>{state.direct.q='通勤时间适合读什么？'; state.stack=[{view:'home'},{view:'directResult'}]; state.tab='direct';},
+    menu:       ()=>{state.stack=[{view:'home'}]; state.menuQ='q1'; state.menuA='a1'; state.menu={title:'为什么越来越多人在地铁上读长文章，而不是刷短视频？'};},
+    empty:      ()=>{state.tab='hot'; state.stack=base; state.empty=true;}
+  };
+  const fn = map[key] || function(){};
+  fn();
+  if(h.endsWith('-offline')){ state.offline = true; state.banner = {title:'离线', text:'网络不可用。当前显示 20:41 的缓存，位置已保留。'}; }
+}
+
+bootFromHash();
+fit();
+render();
+</script>
+</body>
+</html>
