@@ -18,8 +18,11 @@
 ```bash
 git clone git@github.com:snake34475/zhihu-koreader-plugin.git
 cd zhihu-koreader-plugin
-open kual/prototype/index.html      # 原型：不需要服务器，不需要联网
+git checkout kual-native-reader          # 交付物在这个分支，不在 main
+open kual/prototype/index.html           # 原型：不需要服务器，不需要联网
 ```
+
+> 新机器上直接 `git clone` 默认落在 `main`，看不到本目录。务必先切到 `kual-native-reader`。
 
 - 设计稿在 Ardot 云端，需要**同一个账号**才有权限；没有权限时，本文档的屏幕清单与规格表仍然够用，原型也能完整走查。
 - 原型是纯静态文件，`file://` 直接打开即可；要放到局域网给别的机器看，在 `kual/prototype/` 里跑 `python3 -m http.server 8000`。
