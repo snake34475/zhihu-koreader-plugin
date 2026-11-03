@@ -143,8 +143,8 @@ function UI:menu_items()
             { text = "最近直答", callback = function() self:show_cached("answer") end },
         } },
         { text = "设置", callback = function() self:settings() end },
-        { text = "关于 · 0.2.5", callback = function()
-            UI.message("知乎 0.2.5\n热榜、推荐、问题回答、直答与离线阅读。\n回答正文支持左右滑动切换，评论可分页查看。")
+        { text = "关于 · 0.2.6", callback = function()
+            UI.message("知乎 0.2.6\n热榜、推荐、问题回答、直答与离线阅读。\n回答正文支持左右滑动切换，评论可分页查看。")
         end },
     }
 end
@@ -607,13 +607,12 @@ function UI:read_answer(context, entry, index)
         title = string.format("回答摘要 %d / %d", index, #entry.result.items),
         subtitle = Renderer.preview(context.question.title, 18),
         text = context.question.title .. "\n\n" .. Renderer.summary(answer),
-        side = self.config:get("reader_side"),
         on_prev = index > 1 and function() move(index - 1) end or nil,
         on_next = index < #entry.result.items and function() move(index + 1) end or nil,
         actions = actions,
-        on_side_change = function(side) self.config:set("reader_side", side) end,
     }
     UIManager:show(viewer)
+    UIManager:setDirty(viewer, "full")
     return viewer
 end
 
@@ -685,13 +684,12 @@ function UI:show_logged_body(item, result, cached, navigation)
         subtitle = (cached and ("缓存于 " .. (stamp or "未知时间")) or "已校验正文")
             .. (navigation and navigation.title and (" · " .. Renderer.preview(navigation.title, 18)) or ""),
         text = result.content,
-        side = self.config:get("reader_side"),
         on_prev = previous and function() move(previous, navigation.items[previous]) end or nil,
         on_next = following and function() move(following, navigation.items[following]) end or nil,
         actions = actions,
-        on_side_change = function(side) self.config:set("reader_side", side) end,
     }
     UIManager:show(viewer)
+    UIManager:setDirty(viewer, "full")
     self:prefetch_next_answer(navigation)
     return viewer
 end

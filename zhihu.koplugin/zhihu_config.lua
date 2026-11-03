@@ -7,7 +7,6 @@ Config.defaults = {
     hot_limit = 30,
     timeout = 30,
     model = "zhida-fast-1p5",
-    reader_side = "left", -- 阅读页高频按钮列位置：left / right
     download_images = false, -- Reserved for P1; MVP never fetches images.
     remember_login = false,
 }
@@ -44,8 +43,6 @@ function Config.validate(key, value)
         local found = false
         for _, model in ipairs(Config.models) do if value == model then found = true end end
         if not found then return nil, "不支持的直答模型。" end
-    elseif key == "reader_side" then
-        if value ~= "left" and value ~= "right" then return nil, "按钮列只能位于左侧或右侧。" end
     elseif key == "download_images" then
         if value ~= false then return nil, "图片下载将在 P1 加入，当前仅显示文字。" end
     elseif key == "remember_login" then

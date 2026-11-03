@@ -6,7 +6,7 @@
 
 | 部分 | 状态 | 已验证范围 |
 |---|---|---|
-| `zhihu.koplugin` 0.2.5（已部署，待重启加载） | 摘要与已登录阅读代码，新增可选保持登录 | 搜索已移除；热榜、推荐、问题回答改用网页端会话 API，直答保留开放平台；部署后核对设备文件为 0.2.5，Cookie 持久化仍待 KOReader 重启后验收 |
+| `zhihu.koplugin` 0.2.6（已部署，待重启加载） | 回答页底部操作栏与整页刷新修复；移除侧边导航按钮 | 设备文件核对为 0.2.6；实机显示和触摸验收待 KOReader 重启 |
 | 匿名单条回答探测 | 可选实验 | 用户点击后向知乎网页详情接口请求一次；PW4 对测试回答返回 403 人机验证，未取得正文 |
 | `zhihu-qr-probe.koplugin` | PW4 登录门槛失败 | 2026-11-03 在 PW4 运行新版设备探针，登录页 HTTP 302，被分类为 `verification_required`；按停止门槛结束，未请求 `/udid`、未生成二维码 |
 | 手工 Cookie 单次探针 | 内容读取通过初步门槛 | 用户在本机隐藏输入 Cookie，经 SSH stdin 临时送入 PW4；热榜 HTTP 200/30 条，指定回答详情 HTTP 200，正文 1,478 字节（规范化文本 1,198 字节），回答 ID 匹配，未见付费/截断标记；评论第一页与第二页均 HTTP 200、各 10 条非空且均有下一游标 |
@@ -50,8 +50,8 @@
 
 1. 已完成新版探针 PW4 登录页复测；HTTP 302 `verification_required`，扫码路线按门槛停止，不继续请求 `/udid` 或生成二维码。
 2. 用户的网页登录 Cookie 已在 PW4 探针验证 `/api/v3/feed/topstory/hot-lists/total`、`/api/v3/feed/topstory/recommend` 和 `/api/v4/questions/{id}/feeds`，均为 HTTP 200，分页字段已确认。
-3. 指定回答详情及评论前两页已 HTTP 200；用户随后报告新版临时会话已在 KOReader 导入成功。0.2.5 已部署到设备，但 KOReader 尚未重启；重启后需重新导入/登录（0.2.4 会话仅在内存中），再开启“保持登录”，并验收正文/评论 UI、文件权限和后续重启恢复。
-4. 0.2.5 已更新到 `/mnt/us/koreader/plugins/zhihu.koplugin`，设备文件核对为 0.2.5；旧版备份位于 `/mnt/us/koreader/backups/zhihu.koplugin-20261103-193940`。普通插件升级只覆盖插件目录时，已保存的 `settings/zhihu_session.json` 会保留；重置 KOReader 设置目录或手动删除会话文件会清除它。重启 KOReader 后新代码才会加载。
+3. 指定回答详情及评论前两页已 HTTP 200；用户随后报告新版临时会话已在 KOReader 导入成功。0.2.6 已部署到设备，但 KOReader 尚未重启；重启后验收回答页底部“查看评论/查看摘要/刷新正文”可见且触发整页刷新，并确认侧栏已删除、左右滑动仍切换回答。
+4. 0.2.6 已更新到 `/mnt/us/koreader/plugins/zhihu.koplugin`，设备文件核对版本号为 0.2.6；旧版备份位于 `/mnt/us/koreader/backups/zhihu.koplugin-20261103-195619`。普通插件升级只覆盖插件目录时，已保存的 `settings/zhihu_session.json` 会保留；重置 KOReader 设置目录或手动删除会话文件会清除它。重启 KOReader 后新代码才会加载。
 
 ## 远期展望
 
